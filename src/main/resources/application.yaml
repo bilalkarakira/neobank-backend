@@ -34,3 +34,5 @@ app:
     max-savings: 4
   transfers:
     daily-limit: 5000.00
+  history:
+    export-max-rows: 10000

@@ -6,7 +6,10 @@ import com.bilal.neobank.account.AccountNotFoundException;
 import com.bilal.neobank.account.AccountTypeNotAllowedException;
 import com.bilal.neobank.ledger.IdempotencyKeyReusedException;
 import com.bilal.neobank.ledger.InvalidIdempotencyKeyException;
+import com.bilal.neobank.history.InvalidFilterException;
 import com.bilal.neobank.ledger.InsufficientFundsException;
+import org.springframework.beans.TypeMismatchException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import com.bilal.neobank.transfer.TransferExceptions;
 import com.bilal.neobank.auth.EmailAlreadyRegisteredException;
 import com.bilal.neobank.auth.InvalidCredentialsException;
@@ -118,6 +121,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "DAILY_LIMIT_EXCEEDED");
         problem.setProperty("dailyLimit", ex.getLimit().toPlainString());
         problem.setProperty("remaining", ex.getRemaining().toPlainString());
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidFilterException.class)
+    ProblemDetail handleInvalidFilter(InvalidFilterException ex) {
+        return validationProblem(ex.getFields());
+    }
+
+    /** A query parameter that cannot be converted (bad date, unknown enum value, non-number). */
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
+            HttpStatusCode status, WebRequest request) {
+        String name = ex instanceof MethodArgumentTypeMismatchException mismatch ? mismatch.getName()
+                : String.valueOf(ex.getPropertyName());
+        return handleExceptionInternal(ex, validationProblem(Map.of(name, "has an invalid value")), headers, status,
+                request);
+    }
+
+    private static ProblemDetail validationProblem(Map<String, String> fields) {
+        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "Validation failed", "Request validation failed.",
+                "VALIDATION_FAILED");
+        problem.setProperty("fields", fields);
         return problem;
     }
 

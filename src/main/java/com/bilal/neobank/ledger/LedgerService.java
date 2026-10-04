@@ -70,7 +70,8 @@ public class LedgerService {
                 throw new InsufficientFundsException();
             }
             entryRepository.save(
-                    new LedgerEntry(transaction.getId(), account.getId(), posting.amount(), account.getBalance()));
+                    new LedgerEntry(transaction.getId(), account.getId(), posting.amount(), account.getBalance(),
+                            transaction.getCreatedAt()));
         }
         return transaction;
     }

@@ -9,7 +9,6 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 /** Append-only (a database trigger rejects updates and deletes). Credit is positive, debit negative. */
@@ -40,12 +39,12 @@ public class LedgerEntry {
         // required by JPA
     }
 
-    public LedgerEntry(UUID transactionId, UUID accountId, BigDecimal amount, BigDecimal balanceAfter) {
+    public LedgerEntry(UUID transactionId, UUID accountId, BigDecimal amount, BigDecimal balanceAfter, Instant createdAt) {
         this.transactionId = transactionId;
         this.accountId = accountId;
         this.amount = amount;
         this.balanceAfter = balanceAfter;
-        this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS); // Postgres keeps microseconds; keep API values identical to stored ones
+        this.createdAt = createdAt;
     }
 
     public Long getId() { return id; }
