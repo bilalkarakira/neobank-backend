@@ -8,13 +8,17 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.UUID;
 
-/** The balance is a string so JSON consumers never round money through floating point. */
+/**
+ * The balance is a string so JSON consumers never round money through floating point. {@code interestRate} is the
+ * yearly rate (APY) as a percentage like "3.50" for savings accounts, and null for every other type.
+ */
 public record AccountResponse(UUID id, String iban, AccountType type, String currency, AccountStatus status,
-        String nickname, String balance, Instant createdAt) {
+        String nickname, String balance, String interestRate, Instant createdAt) {
 
-    public static AccountResponse from(Account account) {
+    public static AccountResponse from(Account account, String savingsApyPercent) {
         return new AccountResponse(account.getId(), account.getIban(), account.getType(), account.getCurrency(),
                 account.getStatus(), account.getNickname(),
-                account.getBalance().setScale(2, RoundingMode.UNNECESSARY).toPlainString(), account.getCreatedAt());
+                account.getBalance().setScale(2, RoundingMode.UNNECESSARY).toPlainString(),
+                account.getType() == AccountType.SAVINGS ? savingsApyPercent : null, account.getCreatedAt());
     }
 }

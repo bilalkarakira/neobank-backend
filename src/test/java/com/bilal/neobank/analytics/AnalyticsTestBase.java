@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * written straight into the ledger tables (the ledger service cannot backdate), always as a balanced pair of entries
  * with a consistent running balance, so the reconciliation check still holds.
  */
-abstract class AnalyticsTestBase {
+public abstract class AnalyticsTestBase {
 
     protected static final String PASSWORD = "S3curepass12";
 
@@ -50,7 +50,7 @@ abstract class AnalyticsTestBase {
     private final AtomicInteger sequence = new AtomicInteger();
 
     @BeforeEach
-    void clean() {
+    protected void clean() {
         cleaner.clean();
     }
 

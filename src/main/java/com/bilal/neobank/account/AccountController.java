@@ -2,6 +2,7 @@ package com.bilal.neobank.account;
 
 import com.bilal.neobank.account.dto.AccountResponse;
 import com.bilal.neobank.account.dto.OpenAccountRequest;
+import com.bilal.neobank.interest.InterestProperties;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,25 +24,31 @@ import java.util.UUID;
 public class AccountController {
 
     private final AccountService accountService;
+    private final InterestProperties interestProperties;
 
-    public AccountController(AccountService accountService) {
+    public AccountController(AccountService accountService, InterestProperties interestProperties) {
         this.accountService = accountService;
+        this.interestProperties = interestProperties;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public AccountResponse open(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody OpenAccountRequest request) {
-        return AccountResponse.from(accountService.open(userId(jwt), request));
+        return response(accountService.open(userId(jwt), request));
     }
 
     @GetMapping
     public List<AccountResponse> list(@AuthenticationPrincipal Jwt jwt) {
-        return accountService.list(userId(jwt)).stream().map(AccountResponse::from).toList();
+        return accountService.list(userId(jwt)).stream().map(this::response).toList();
     }
 
     @GetMapping("/{id}")
     public AccountResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
-        return AccountResponse.from(accountService.get(userId(jwt), id));
+        return response(accountService.get(userId(jwt), id));
+    }
+
+    private AccountResponse response(Account account) {
+        return AccountResponse.from(account, interestProperties.apyPercent());
     }
 
     private static UUID userId(Jwt jwt) {

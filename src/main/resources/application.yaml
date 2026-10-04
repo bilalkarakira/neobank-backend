@@ -36,3 +36,7 @@ app:
     daily-limit: 5000.00
   history:
     export-max-rows: 10000
+  interest:
+    apy: 0.035            # 3.5% effective yearly rate, one flat rate for every savings account
+    scheduler-enabled: true
+    cron: "0 30 0 * * *"  # daily at 00:30 UTC; the first run of a month accrues the month that just ended

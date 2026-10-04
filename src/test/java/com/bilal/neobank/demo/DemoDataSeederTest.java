@@ -75,6 +75,36 @@ class DemoDataSeederTest {
     }
 
     @Test
+    void theSavingsAccountEarnsMonthlyInterestThatCompounds() throws Exception {
+        seeder.seed();
+
+        var rows = jdbc.queryForList("""
+                select a.period, a.amount, a.average_balance, t.type, t.initiated_by
+                from interest_accruals a join transactions t on t.id = a.transaction_id
+                join accounts acc on acc.id = a.account_id
+                where acc.nickname = 'Rainy day' and a.status = 'CREDITED' order by a.period
+                """);
+        assertThat(rows.size()).isGreaterThanOrEqualTo(4); // one per completed month of the demo history
+        for (var row : rows) {
+            assertThat(row.get("type")).isEqualTo("INTEREST");
+            assertThat(row.get("initiated_by")).isNull();
+            assertThat((BigDecimal) row.get("amount")).isGreaterThan(BigDecimal.ZERO);
+        }
+        // the savings balance keeps growing, so each month's average is higher than the last
+        for (int i = 1; i < rows.size(); i++) {
+            assertThat((BigDecimal) rows.get(i).get("average_balance"))
+                    .isGreaterThan((BigDecimal) rows.get(i - 1).get("average_balance"));
+        }
+        // it shows up in the customer's history with the right label, and the books still balance
+        String history = mockMvc.perform(get("/api/accounts/" + jdbc.queryForObject(
+                "select id::text from accounts where nickname = 'Rainy day'", String.class)
+                + "/transactions?type=INTEREST").header("Authorization", demoToken())).andReturn().getResponse()
+                .getContentAsString();
+        assertThat(history).contains("\"label\":\"Interest earned\"");
+        assertThat(reconciliation.check().isHealthy()).isTrue();
+    }
+
+    @Test
     void isIdempotent() {
         assertThat(seeder.seed()).isTrue();
         int users = count("select count(*) from users");

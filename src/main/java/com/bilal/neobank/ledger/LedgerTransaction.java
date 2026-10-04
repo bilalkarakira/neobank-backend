@@ -24,7 +24,8 @@ public class LedgerTransaction {
     @Column(nullable = false, length = 20)
     private TransactionType type;
 
-    @Column(name = "initiated_by", nullable = false)
+    /** Null for transactions made by the system itself (e.g. interest). */
+    @Column(name = "initiated_by")
     private UUID initiatedBy;
 
     @Column(name = "idempotency_key", nullable = false, length = 64)

@@ -20,6 +20,8 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     Optional<Account> findByIban(String iban);
 
+    List<Account> findByTypeOrderByCreatedAtAsc(AccountType type);
+
     long countByUserIdAndTypeAndStatusNot(UUID userId, AccountType type, AccountStatus status);
 
     @Query(value = "select nextval('account_number_seq')", nativeQuery = true)

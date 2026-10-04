@@ -6,6 +6,9 @@ import com.bilal.neobank.account.AccountType;
 import com.bilal.neobank.account.IbanGenerator;
 import com.bilal.neobank.category.Category;
 import com.bilal.neobank.category.CategoryRepository;
+import com.bilal.neobank.interest.InterestCalculator;
+import com.bilal.neobank.interest.InterestProperties;
+import com.bilal.neobank.interest.InterestService;
 import com.bilal.neobank.ledger.LedgerReconciliationService;
 import com.bilal.neobank.ledger.SystemAccounts;
 import com.bilal.neobank.ledger.TransactionType;
@@ -29,6 +32,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -37,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -53,8 +58,17 @@ public class DemoDataSeeder implements ApplicationRunner {
     public static final String DEMO_PASSWORD = "DemoPassw0rd";
     private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
 
+    /** How one month of interest was computed (kept in interest_accruals next to its transaction). */
+    private record Accrual(String period, BigDecimal averageBalance, BigDecimal monthlyRate) {
+    }
+
     private record Event(Instant at, UUID initiatedBy, UUID source, UUID destination, BigDecimal amount,
-            String description, UUID categoryId, TransactionType type) {
+            String description, UUID categoryId, TransactionType type, Accrual accrual) {
+
+        Event(Instant at, UUID initiatedBy, UUID source, UUID destination, BigDecimal amount, String description,
+                UUID categoryId, TransactionType type) {
+            this(at, initiatedBy, source, destination, amount, description, categoryId, type, null);
+        }
     }
 
     private record Merchant(String first, String last, String email, String category) {
@@ -80,12 +94,14 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final Clock clock;
     private final TransactionTemplate transactions;
     private final boolean seedOnStartup;
+    private final InterestProperties interestProperties;
 
     public DemoDataSeeder(UserRepository userRepository, AccountRepository accountRepository,
             CategoryRepository categoryRepository, PasswordEncoder passwordEncoder, JdbcTemplate jdbc,
             LedgerReconciliationService reconciliation, Clock clock, PlatformTransactionManager transactionManager,
-            @Value("${app.demo.seed-on-startup:true}") boolean seedOnStartup) {
+            InterestProperties interestProperties, @Value("${app.demo.seed-on-startup:true}") boolean seedOnStartup) {
         this.seedOnStartup = seedOnStartup;
+        this.interestProperties = interestProperties;
         this.userRepository = userRepository;
         this.accountRepository = accountRepository;
         this.categoryRepository = categoryRepository;
@@ -140,6 +156,7 @@ public class DemoDataSeeder implements ApplicationRunner {
 
         List<Event> events = generateEvents(demo.getId(), sam.getId(), checking, savings, samChecking, categories,
                 merchantAccounts);
+        events.addAll(interestEvents(events, savings));
         events.sort(Comparator.comparing(Event::at));
         insert(events);
 
@@ -200,6 +217,47 @@ public class DemoDataSeeder implements ApplicationRunner {
         return events.stream().filter(e -> !e.at().isAfter(now)).collect(java.util.stream.Collectors.toList());
     }
 
+    /**
+     * One interest credit per completed month for the savings account, computed with the SAME formulas as the real
+     * job (average of the end-of-day balances, which include the interest of the earlier months) and dated like the
+     * real job would have dated it: the first minutes of the following month.
+     */
+    private List<Event> interestEvents(List<Event> events, UUID savings) {
+        List<Event> inflows = new ArrayList<>(events.stream().filter(e -> e.destination().equals(savings)).toList());
+        if (inflows.isEmpty()) {
+            return List.of();
+        }
+        inflows.sort(Comparator.comparing(Event::at));
+        Instant now = clock.instant();
+        BigDecimal rate = InterestCalculator.monthlyRate(interestProperties.apy());
+        YearMonth lastCompleted = YearMonth.now(clock.withZone(ZoneOffset.UTC)).minusMonths(1);
+        List<Event> created = new ArrayList<>();
+
+        for (YearMonth period = YearMonth.from(inflows.get(0).at().atOffset(ZoneOffset.UTC)); !period.isAfter(lastCompleted);
+                period = period.plusMonths(1)) {
+            Instant creditedAt = at(period.plusMonths(1).atDay(1), 0, 30);
+            if (creditedAt.isAfter(now)) {
+                break;
+            }
+            List<BigDecimal> endOfDay = new ArrayList<>();
+            for (LocalDate day = period.atDay(1); !day.isAfter(period.atEndOfMonth()); day = day.plusDays(1)) {
+                Instant dayEnd = day.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+                endOfDay.add(inflows.stream().filter(e -> e.at().isBefore(dayEnd)).map(Event::amount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add));
+            }
+            BigDecimal average = InterestCalculator.averageBalance(endOfDay);
+            BigDecimal amount = InterestCalculator.interest(average, rate);
+            if (amount.signum() > 0) {
+                Event interest = new Event(creditedAt, null, SystemAccounts.INTEREST, savings, amount,
+                        InterestService.description(period), null, TransactionType.INTEREST,
+                        new Accrual(period.toString(), average, rate));
+                created.add(interest);
+                inflows.add(interest); // later months earn interest on this interest
+            }
+        }
+        return created;
+    }
+
     private void scatter(List<Event> events, Random random, LocalDate month, int count, int min, int max,
             String[] notes, UUID demoId, UUID checking, UUID merchantAccount, UUID categoryId) {
         for (int i = 0; i < count; i++) {
@@ -210,25 +268,26 @@ public class DemoDataSeeder implements ApplicationRunner {
         }
     }
 
+    private static final Set<UUID> SYSTEM_ACCOUNTS = Set.of(SystemAccounts.FUNDING, SystemAccounts.INTEREST);
+
+    /** Writes the events in time order with a consistent running balance (the ledger service cannot backdate). */
     private void insert(List<Event> events) {
+        // running balances; the bank accounts start from what they already hold, new customer accounts from zero
         Map<UUID, BigDecimal> balances = new HashMap<>();
-        BigDecimal fundingDelta = BigDecimal.ZERO;
+        for (UUID system : SYSTEM_ACCOUNTS) {
+            balances.put(system, jdbc.queryForObject("select balance from accounts where id = ?", BigDecimal.class, system));
+        }
         int n = 0;
         for (Event event : events) {
             n++;
-            boolean fromFunding = event.source().equals(SystemAccounts.FUNDING);
-            BigDecimal sourceBalance = balances.getOrDefault(event.source(), BigDecimal.ZERO);
-            if (fromFunding) {
-                fundingDelta = fundingDelta.subtract(event.amount());
-            } else if (sourceBalance.compareTo(event.amount()) < 0) {
+            BigDecimal sourceBefore = balances.getOrDefault(event.source(), BigDecimal.ZERO);
+            if (!SYSTEM_ACCOUNTS.contains(event.source()) && sourceBefore.compareTo(event.amount()) < 0) {
                 throw new IllegalStateException("Demo data would overdraw an account at " + event.at());
             }
-            BigDecimal newSource = fromFunding ? sourceBalance : sourceBalance.subtract(event.amount());
-            BigDecimal newDestination = balances.getOrDefault(event.destination(), BigDecimal.ZERO).add(event.amount());
-            if (!fromFunding) {
-                balances.put(event.source(), newSource);
-            }
-            balances.put(event.destination(), newDestination);
+            BigDecimal sourceAfter = sourceBefore.subtract(event.amount());
+            BigDecimal destinationAfter = balances.getOrDefault(event.destination(), BigDecimal.ZERO).add(event.amount());
+            balances.put(event.source(), sourceAfter);
+            balances.put(event.destination(), destinationAfter);
 
             UUID transactionId = UUID.randomUUID();
             OffsetDateTime when = OffsetDateTime.ofInstant(event.at(), ZoneOffset.UTC);
@@ -238,21 +297,21 @@ public class DemoDataSeeder implements ApplicationRunner {
                     values (?, ?, ?, ?, 'demo-seed', ?, ?, ?, ?, ?, ?)
                     """, transactionId, event.type().name(), event.initiatedBy(), "demo-seed-" + n, event.description(),
                     event.source(), event.destination(), event.amount(), event.categoryId(), when);
-            BigDecimal sourceAfter = fromFunding
-                    ? balances.getOrDefault(SystemAccounts.FUNDING, BigDecimal.ZERO).subtract(event.amount())
-                    : newSource;
-            if (fromFunding) {
-                balances.put(SystemAccounts.FUNDING, sourceAfter);
-            }
             entry(transactionId, event.source(), event.amount().negate(), sourceAfter, when);
-            entry(transactionId, event.destination(), event.amount(), newDestination, when);
+            entry(transactionId, event.destination(), event.amount(), destinationAfter, when);
+
+            if (event.accrual() != null) {
+                jdbc.update("""
+                        insert into interest_accruals (account_id, period, status, average_balance, monthly_rate, amount,
+                                                       transaction_id, processed_at)
+                        values (?, ?, 'CREDITED', ?, ?, ?, ?, ?)
+                        """, event.destination(), event.accrual().period(), event.accrual().averageBalance(),
+                        event.accrual().monthlyRate(), event.amount(), transactionId, when);
+            }
         }
         for (Map.Entry<UUID, BigDecimal> balance : balances.entrySet()) {
-            if (!balance.getKey().equals(SystemAccounts.FUNDING)) {
-                jdbc.update("update accounts set balance = ? where id = ?", balance.getValue(), balance.getKey());
-            }
+            jdbc.update("update accounts set balance = ? where id = ?", balance.getValue(), balance.getKey());
         }
-        jdbc.update("update accounts set balance = balance + ? where id = ?", fundingDelta, SystemAccounts.FUNDING);
     }
 
     private void entry(UUID transactionId, UUID accountId, BigDecimal amount, BigDecimal balanceAfter,

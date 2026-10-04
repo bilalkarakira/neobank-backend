@@ -6,6 +6,7 @@ import com.bilal.neobank.account.AccountType;
 import com.bilal.neobank.history.dto.HistoryPage;
 import com.bilal.neobank.history.dto.TransactionItem;
 import com.bilal.neobank.history.dto.TransactionItem.Counterparty;
+import com.bilal.neobank.ledger.TransactionType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -92,7 +93,8 @@ public class HistoryService {
 
     private static Counterparty counterparty(HistoryRow row, UUID userId) {
         if (row.counterpartyType() == AccountType.SYSTEM) {
-            return new Counterparty("Cash deposit", null, false);
+            // the bank itself: either paying interest or handing out (simulated) cash
+            return new Counterparty(row.type() == TransactionType.INTEREST ? "Interest earned" : "Cash deposit", null, false);
         }
         if (userId.equals(row.counterpartyUserId())) {
             String label = row.counterpartyNickname() != null ? row.counterpartyNickname()
