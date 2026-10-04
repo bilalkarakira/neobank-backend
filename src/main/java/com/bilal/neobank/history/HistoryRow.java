@@ -11,5 +11,5 @@ import java.util.UUID;
 public record HistoryRow(UUID transactionId, TransactionType type, BigDecimal amount, BigDecimal balanceAfter,
         String description, Instant createdAt, AccountType counterpartyType, UUID counterpartyUserId,
         String counterpartyIban, String counterpartyNickname, String counterpartyFirstName,
-        String counterpartyLastName) {
+        String counterpartyLastName, String categoryName) {
 }

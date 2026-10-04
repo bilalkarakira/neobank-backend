@@ -18,5 +18,7 @@ public record TransferRequest(
         @DecimalMax(value = "10000.00", message = "must be at most 10000.00")
         @Digits(integer = 5, fraction = 2, message = "must have at most 2 decimal places")
         BigDecimal amount,
-        @Size(max = 100) String description) {
+        @Size(max = 100) String description,
+        /** Optional spending category; only kept when sending to another customer. */
+        UUID categoryId) {
 }

@@ -6,6 +6,7 @@ import com.bilal.neobank.account.AccountNotFoundException;
 import com.bilal.neobank.account.AccountTypeNotAllowedException;
 import com.bilal.neobank.ledger.IdempotencyKeyReusedException;
 import com.bilal.neobank.ledger.InvalidIdempotencyKeyException;
+import com.bilal.neobank.category.CategoryNotFoundException;
 import com.bilal.neobank.history.InvalidFilterException;
 import com.bilal.neobank.ledger.InsufficientFundsException;
 import org.springframework.beans.TypeMismatchException;
@@ -122,6 +123,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setProperty("dailyLimit", ex.getLimit().toPlainString());
         problem.setProperty("remaining", ex.getRemaining().toPlainString());
         return problem;
+    }
+
+    @ExceptionHandler(CategoryNotFoundException.class)
+    ProblemDetail handleCategoryNotFound(CategoryNotFoundException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Category not found", ex.getMessage(), "CATEGORY_NOT_FOUND");
     }
 
     @ExceptionHandler(InvalidFilterException.class)

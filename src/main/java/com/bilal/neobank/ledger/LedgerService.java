@@ -38,10 +38,20 @@ public class LedgerService {
         this.entityManager = entityManager;
     }
 
-    /** @param postings exactly one debit (negative) and one credit (positive) of the same size, on different accounts */
+    /** Convenience overload without a category. Transactional itself: a call to this.post(...) skips the proxy. */
     @Transactional
     public LedgerTransaction post(TransactionType type, UUID initiatedBy, String idempotencyKey, String requestHash,
             String description, List<Posting> postings) {
+        return post(type, initiatedBy, idempotencyKey, requestHash, description, postings, null);
+    }
+
+    /**
+     * @param postings exactly one debit (negative) and one credit (positive) of the same size, on different accounts
+     * @param categoryId spending category of the transaction, or null
+     */
+    @Transactional
+    public LedgerTransaction post(TransactionType type, UUID initiatedBy, String idempotencyKey, String requestHash,
+            String description, List<Posting> postings, UUID categoryId) {
         Posting[] pair = requireBalancedPair(postings);
         Posting debit = pair[0];
         Posting credit = pair[1];
@@ -58,7 +68,8 @@ public class LedgerService {
         accounts.values().forEach(entityManager::refresh);
 
         LedgerTransaction transaction = transactionRepository.saveAndFlush(new LedgerTransaction(type, initiatedBy,
-                idempotencyKey, requestHash, description, debit.accountId(), credit.accountId(), credit.amount()));
+                idempotencyKey, requestHash, description, debit.accountId(), credit.accountId(), credit.amount(),
+                categoryId));
 
         for (Posting posting : postings) {
             Account account = accounts.get(posting.accountId());

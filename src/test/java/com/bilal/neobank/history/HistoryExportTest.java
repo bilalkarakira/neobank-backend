@@ -42,10 +42,10 @@ class HistoryExportTest extends HistoryTestBase {
         assertThat(body).startsWith("﻿");
         List<String> lines = List.of(body.substring(1).split("\r\n"));
         assertThat(lines).hasSize(3);
-        assertThat(lines.get(0)).isEqualTo("Date (UTC),Type,Direction,Amount,Balance after,Counterparty,IBAN,Note");
-        assertThat(lines.get(1)).matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},DEPOSIT,IN,100\\.00,100\\.00,Cash deposit,,Salary");
+        assertThat(lines.get(0)).isEqualTo("Date (UTC),Type,Direction,Amount,Balance after,Counterparty,IBAN,Category,Note");
+        assertThat(lines.get(1)).matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},DEPOSIT,IN,100\\.00,100\\.00,Cash deposit,,,Salary");
         assertThat(lines.get(2)).matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},TRANSFER,OUT,-30\\.00,70\\.00,Bob M\\.,"
-                + bobAcc.iban() + ",Rent");
+                + bobAcc.iban() + ",,Rent");
     }
 
     @Test

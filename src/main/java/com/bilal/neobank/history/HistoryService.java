@@ -61,7 +61,8 @@ public class HistoryService {
         }
 
         CsvWriter csv = new CsvWriter();
-        csv.row(List.of("Date (UTC)", "Type", "Direction", "Amount", "Balance after", "Counterparty", "IBAN", "Note"));
+        csv.row(List.of("Date (UTC)", "Type", "Direction", "Amount", "Balance after", "Counterparty", "IBAN",
+                "Category", "Note"));
         for (HistoryRow row : rows) {
             TransactionItem item = toItem(row, userId);
             csv.row(List.of(
@@ -72,6 +73,7 @@ public class HistoryService {
                     item.balanceAfter(),
                     CsvWriter.text(item.counterparty().label()),
                     item.counterparty().iban() == null ? "" : item.counterparty().iban(),
+                    CsvWriter.text(item.category()),
                     CsvWriter.text(item.description())));
         }
         String filename = "neobank-%s-%s.csv".formatted(account.getIban(), LocalDate.now(ZoneOffset.UTC));
@@ -82,8 +84,10 @@ public class HistoryService {
 
     private static TransactionItem toItem(HistoryRow row, UUID userId) {
         Direction direction = row.amount().signum() < 0 ? Direction.OUT : Direction.IN;
+        // a category is the SENDER's label for their own spending, so the receiver never sees it
+        String category = direction == Direction.OUT ? row.categoryName() : null;
         return new TransactionItem(row.transactionId(), row.type(), direction, money(row.amount()),
-                money(row.balanceAfter()), row.description(), counterparty(row, userId), row.createdAt());
+                money(row.balanceAfter()), row.description(), category, counterparty(row, userId), row.createdAt());
     }
 
     private static Counterparty counterparty(HistoryRow row, UUID userId) {

@@ -6,6 +6,8 @@ import com.bilal.neobank.account.AccountService;
 import com.bilal.neobank.account.AccountStatus;
 import com.bilal.neobank.account.AccountType;
 import com.bilal.neobank.account.IbanGenerator;
+import com.bilal.neobank.category.CategoryNotFoundException;
+import com.bilal.neobank.category.CategoryRepository;
 import com.bilal.neobank.ledger.Fingerprint;
 import com.bilal.neobank.ledger.IdempotentTransactions;
 import com.bilal.neobank.ledger.LedgerEntryRepository;
@@ -38,16 +40,18 @@ public class TransferService {
     private final LedgerEntryRepository entryRepository;
     private final IdempotentTransactions idempotent;
     private final TransferExecutor executor;
+    private final CategoryRepository categoryRepository;
 
     public TransferService(AccountService accountService, AccountRepository accountRepository,
             UserRepository userRepository, LedgerEntryRepository entryRepository, IdempotentTransactions idempotent,
-            TransferExecutor executor) {
+            TransferExecutor executor, CategoryRepository categoryRepository) {
         this.accountService = accountService;
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
         this.entryRepository = entryRepository;
         this.idempotent = idempotent;
         this.executor = executor;
+        this.categoryRepository = categoryRepository;
     }
 
     public Result transfer(UUID userId, String idempotencyKey, TransferRequest request) {
@@ -66,12 +70,17 @@ public class TransferService {
         BigDecimal amount = request.amount().setScale(2, RoundingMode.UNNECESSARY);
         String description = request.description() == null || request.description().isBlank()
                 ? null : request.description().trim();
+        UUID categoryId = request.categoryId();
+        if (categoryId != null && !categoryRepository.existsById(categoryId)) {
+            throw new CategoryNotFoundException();
+        }
+        // the category is part of the request, so changing it under the same key is a different request
         String hash = Fingerprint.sha256(source.getId() + "|" + iban + "|" + amount.toPlainString() + "|"
-                + (description == null ? "" : description));
+                + (description == null ? "" : description) + "|" + (categoryId == null ? "" : categoryId));
 
         IdempotentTransactions.Outcome outcome = idempotent.execute(userId, idempotencyKey, hash,
                 () -> executor.execute(userId, source.getId(), destination.getId(), amount, description,
-                        idempotencyKey, hash));
+                        idempotencyKey, hash, categoryId));
         return new Result(toResponse(outcome.transaction()), outcome.replayed());
     }
 

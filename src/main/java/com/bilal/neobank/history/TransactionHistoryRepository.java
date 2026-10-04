@@ -25,6 +25,7 @@ public class TransactionHistoryRepository {
             join accounts cp on cp.id = case when e.amount < 0 then t.destination_account_id
                                              else t.source_account_id end
             left join users u on u.id = cp.user_id
+            left join categories cat on cat.id = t.category_id
             where e.account_id = :accountId
             """;
 
@@ -42,7 +43,7 @@ public class TransactionHistoryRepository {
         String sql = """
                 select t.id as transaction_id, t.type, e.amount, e.balance_after, t.description, e.created_at,
                        cp.type as cp_type, cp.user_id as cp_user_id, cp.iban as cp_iban, cp.nickname as cp_nickname,
-                       u.first_name as cp_first_name, u.last_name as cp_last_name
+                       u.first_name as cp_first_name, u.last_name as cp_last_name, cat.name as category_name
                 """ + FROM + where + " order by " + filter.sort().orderBy() + " limit :limit offset :offset";
 
         return jdbc.sql(sql).params(params).query((rs, i) -> new HistoryRow(
@@ -57,7 +58,8 @@ public class TransactionHistoryRepository {
                 rs.getString("cp_iban"),
                 rs.getString("cp_nickname"),
                 rs.getString("cp_first_name"),
-                rs.getString("cp_last_name"))).list();
+                rs.getString("cp_last_name"),
+                rs.getString("category_name"))).list();
     }
 
     public long count(UUID accountId, HistoryFilter filter) {

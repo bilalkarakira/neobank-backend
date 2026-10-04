@@ -45,6 +45,10 @@ public class LedgerTransaction {
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal amount;
 
+    /** Null = uncategorized. Only set on transfers to other customers (it is the sender's spending category). */
+    @Column(name = "category_id")
+    private UUID categoryId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -53,7 +57,7 @@ public class LedgerTransaction {
     }
 
     public LedgerTransaction(TransactionType type, UUID initiatedBy, String idempotencyKey, String requestHash,
-            String description, UUID sourceAccountId, UUID destinationAccountId, BigDecimal amount) {
+            String description, UUID sourceAccountId, UUID destinationAccountId, BigDecimal amount, UUID categoryId) {
         this.id = UUID.randomUUID();
         this.type = type;
         this.initiatedBy = initiatedBy;
@@ -63,6 +67,7 @@ public class LedgerTransaction {
         this.sourceAccountId = sourceAccountId;
         this.destinationAccountId = destinationAccountId;
         this.amount = amount;
+        this.categoryId = categoryId;
         this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS); // Postgres keeps microseconds
     }
 
@@ -75,5 +80,6 @@ public class LedgerTransaction {
     public UUID getSourceAccountId() { return sourceAccountId; }
     public UUID getDestinationAccountId() { return destinationAccountId; }
     public BigDecimal getAmount() { return amount; }
+    public UUID getCategoryId() { return categoryId; }
     public Instant getCreatedAt() { return createdAt; }
 }

@@ -42,7 +42,7 @@ public class TransferExecutor {
 
     @Transactional
     public LedgerTransaction execute(UUID userId, UUID sourceId, UUID destinationId, BigDecimal amount,
-            String description, String idempotencyKey, String requestHash) {
+            String description, String idempotencyKey, String requestHash, UUID categoryId) {
         userRepository.findByIdForUpdate(userId).orElseThrow(AccountNotFoundException::new);
 
         Account source = accountRepository.findById(sourceId).orElseThrow(AccountNotFoundException::new);
@@ -63,7 +63,9 @@ public class TransferExecutor {
             }
         }
 
+        // a category describes spending: money moved between my own accounts is not spending
         return ledgerService.post(TransactionType.TRANSFER, userId, idempotencyKey, requestHash, description,
-                List.of(new Posting(sourceId, amount.negate()), new Posting(destinationId, amount)));
+                List.of(new Posting(sourceId, amount.negate()), new Posting(destinationId, amount)),
+                toSomeoneElse ? categoryId : null);
     }
 }
