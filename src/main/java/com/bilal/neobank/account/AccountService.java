@@ -24,6 +24,9 @@ public class AccountService {
 
     @Transactional
     public Account open(UUID userId, OpenAccountRequest request) {
+        if (request.type() == AccountType.SYSTEM) {
+            throw new AccountTypeNotAllowedException(request.type());
+        }
         // Lock the owner's row so two simultaneous requests cannot both pass the limit check below.
         userRepository.findByIdForUpdate(userId).orElseThrow(AccountNotFoundException::new);
 

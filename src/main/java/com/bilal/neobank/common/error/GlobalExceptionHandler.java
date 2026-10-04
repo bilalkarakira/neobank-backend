@@ -1,7 +1,12 @@
 package com.bilal.neobank.common.error;
 
 import com.bilal.neobank.account.AccountLimitReachedException;
+import com.bilal.neobank.account.AccountNotActiveException;
 import com.bilal.neobank.account.AccountNotFoundException;
+import com.bilal.neobank.account.AccountTypeNotAllowedException;
+import com.bilal.neobank.account.IdempotencyKeyReusedException;
+import com.bilal.neobank.account.InvalidIdempotencyKeyException;
+import com.bilal.neobank.ledger.InsufficientFundsException;
 import com.bilal.neobank.auth.EmailAlreadyRegisteredException;
 import com.bilal.neobank.auth.InvalidCredentialsException;
 import org.springframework.http.HttpHeaders;
@@ -52,6 +57,43 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Account not found.");
         problem.setTitle("Account not found");
         problem.setProperty("code", "ACCOUNT_NOT_FOUND");
+        return problem;
+    }
+
+    @ExceptionHandler(AccountNotActiveException.class)
+    ProblemDetail handleAccountNotActive(AccountNotActiveException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Account not active", "This account is not active.",
+                "ACCOUNT_NOT_ACTIVE");
+    }
+
+    @ExceptionHandler(InsufficientFundsException.class)
+    ProblemDetail handleInsufficientFunds(InsufficientFundsException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Insufficient funds",
+                "The account does not have enough funds.", "INSUFFICIENT_FUNDS");
+    }
+
+    @ExceptionHandler(IdempotencyKeyReusedException.class)
+    ProblemDetail handleIdempotencyKeyReused(IdempotencyKeyReusedException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Idempotency key reused",
+                "This Idempotency-Key was already used for a different request.", "IDEMPOTENCY_KEY_REUSED");
+    }
+
+    @ExceptionHandler(InvalidIdempotencyKeyException.class)
+    ProblemDetail handleInvalidIdempotencyKey(InvalidIdempotencyKeyException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Idempotency key required", ex.getMessage(),
+                "IDEMPOTENCY_KEY_REQUIRED");
+    }
+
+    @ExceptionHandler(AccountTypeNotAllowedException.class)
+    ProblemDetail handleAccountTypeNotAllowed(AccountTypeNotAllowedException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Account type not allowed", ex.getMessage(),
+                "ACCOUNT_TYPE_NOT_ALLOWED");
+    }
+
+    private static ProblemDetail problem(HttpStatus status, String title, String detail, String code) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
+        problem.setTitle(title);
+        problem.setProperty("code", code);
         return problem;
     }
 

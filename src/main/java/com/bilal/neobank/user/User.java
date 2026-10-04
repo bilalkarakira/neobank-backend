@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -47,7 +48,7 @@ public class User {
         this.firstName = firstName;
         this.lastName = lastName;
         this.role = role;
-        this.createdAt = Instant.now();
+        this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS); // Postgres keeps microseconds; keep API values identical to stored ones
     }
 
     public UUID getId() { return id; }

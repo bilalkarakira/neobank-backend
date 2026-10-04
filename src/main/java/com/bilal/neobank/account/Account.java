@@ -9,6 +9,7 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -18,7 +19,8 @@ public class Account {
     @Id
     private UUID id;
 
-    @Column(name = "user_id", nullable = false)
+    /** Null only for SYSTEM accounts. */
+    @Column(name = "user_id")
     private UUID userId;
 
     @Column(nullable = false, unique = true, length = 34)
@@ -57,7 +59,12 @@ public class Account {
         this.status = AccountStatus.ACTIVE;
         this.nickname = nickname;
         this.balance = BigDecimal.ZERO;
-        this.createdAt = Instant.now();
+        this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS); // Postgres keeps microseconds; keep API values identical to stored ones
+    }
+
+    /** Only the ledger moves money; it calls this while holding a row lock on the account. */
+    public void applyDelta(BigDecimal delta) {
+        this.balance = this.balance.add(delta);
     }
 
     public UUID getId() { return id; }

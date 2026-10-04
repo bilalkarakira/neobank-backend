@@ -30,12 +30,11 @@ class AuthControllerTest {
     UserRepository userRepository;
 
     @Autowired
-    com.bilal.neobank.account.AccountRepository accountRepository;
+    com.bilal.neobank.DatabaseCleaner cleaner;
 
     @BeforeEach
     void clean() {
-        accountRepository.deleteAll();
-        userRepository.deleteAll();
+        cleaner.clean();
     }
 
     private static String body(String email, String password) {

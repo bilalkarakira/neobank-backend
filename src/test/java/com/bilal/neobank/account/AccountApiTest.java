@@ -43,10 +43,12 @@ class AccountApiTest {
     @Autowired
     AccountRepository accountRepository;
 
+    @Autowired
+    com.bilal.neobank.DatabaseCleaner cleaner;
+
     @BeforeEach
     void clean() {
-        accountRepository.deleteAll();
-        userRepository.deleteAll();
+        cleaner.clean();
     }
 
     /** Registers a user and returns a bearer token for them. */
@@ -149,7 +151,7 @@ class AccountApiTest {
         pool.shutdown();
 
         assertThat(created).isEqualTo(1);
-        assertThat(accountRepository.count()).isEqualTo(1);
+        assertThat(accountRepository.findAll()).filteredOn(a -> a.getType() != AccountType.SYSTEM).hasSize(1);
     }
 
     @Test

@@ -44,15 +44,14 @@ class LoginFlowTest {
     UserRepository userRepository;
 
     @Autowired
-    com.bilal.neobank.account.AccountRepository accountRepository;
+    com.bilal.neobank.DatabaseCleaner cleaner;
 
     @Autowired
     JwtEncoder jwtEncoder;
 
     @BeforeEach
     void registerUser() throws Exception {
-        accountRepository.deleteAll();
-        userRepository.deleteAll();
+        cleaner.clean();
         mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON).content("""
                 {"firstName":"Bilal","lastName":"Karakira","email":"%s","password":"%s"}
                 """.formatted(EMAIL, PASSWORD))).andExpect(status().isCreated());
