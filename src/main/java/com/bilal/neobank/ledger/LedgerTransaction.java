@@ -7,11 +7,12 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
-/** One business event (a deposit, a transfer). Its ledger entries always sum to zero. */
+/** One business event (a deposit, a transfer): amount moved from the source to the destination account. */
 @Entity
 @Table(name = "transactions")
 public class LedgerTransaction {
@@ -35,6 +36,15 @@ public class LedgerTransaction {
     @Column(length = 100)
     private String description;
 
+    @Column(name = "source_account_id", nullable = false)
+    private UUID sourceAccountId;
+
+    @Column(name = "destination_account_id", nullable = false)
+    private UUID destinationAccountId;
+
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal amount;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -43,14 +53,17 @@ public class LedgerTransaction {
     }
 
     public LedgerTransaction(TransactionType type, UUID initiatedBy, String idempotencyKey, String requestHash,
-            String description) {
+            String description, UUID sourceAccountId, UUID destinationAccountId, BigDecimal amount) {
         this.id = UUID.randomUUID();
         this.type = type;
         this.initiatedBy = initiatedBy;
         this.idempotencyKey = idempotencyKey;
         this.requestHash = requestHash;
         this.description = description;
-        this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS); // Postgres keeps microseconds; keep API values identical to stored ones
+        this.sourceAccountId = sourceAccountId;
+        this.destinationAccountId = destinationAccountId;
+        this.amount = amount;
+        this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS); // Postgres keeps microseconds
     }
 
     public UUID getId() { return id; }
@@ -59,5 +72,8 @@ public class LedgerTransaction {
     public String getIdempotencyKey() { return idempotencyKey; }
     public String getRequestHash() { return requestHash; }
     public String getDescription() { return description; }
+    public UUID getSourceAccountId() { return sourceAccountId; }
+    public UUID getDestinationAccountId() { return destinationAccountId; }
+    public BigDecimal getAmount() { return amount; }
     public Instant getCreatedAt() { return createdAt; }
 }

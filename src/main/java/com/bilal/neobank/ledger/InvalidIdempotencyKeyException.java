@@ -1,4 +1,4 @@
-package com.bilal.neobank.account;
+package com.bilal.neobank.ledger;
 
 public class InvalidIdempotencyKeyException extends RuntimeException {
 

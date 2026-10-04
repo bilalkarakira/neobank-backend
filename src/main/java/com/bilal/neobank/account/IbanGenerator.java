@@ -19,6 +19,11 @@ public final class IbanGenerator {
         return COUNTRY + String.format("%02d", check) + bban;
     }
 
+    /** Users paste IBANs with spaces and in any case: "xx65 neob 1000 0000 01" -> "XX65NEOB1000000001". */
+    public static String normalize(String iban) {
+        return iban == null ? "" : iban.replaceAll("\\s+", "").toUpperCase(java.util.Locale.ROOT);
+    }
+
     /** ISO 13616 validation: move the first four characters to the end, and the number must be 1 mod 97. */
     public static boolean isValid(String iban) {
         if (iban == null || iban.length() < 5 || !iban.matches("[A-Z0-9]+")) {

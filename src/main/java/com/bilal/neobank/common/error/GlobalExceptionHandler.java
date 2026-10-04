@@ -4,9 +4,10 @@ import com.bilal.neobank.account.AccountLimitReachedException;
 import com.bilal.neobank.account.AccountNotActiveException;
 import com.bilal.neobank.account.AccountNotFoundException;
 import com.bilal.neobank.account.AccountTypeNotAllowedException;
-import com.bilal.neobank.account.IdempotencyKeyReusedException;
-import com.bilal.neobank.account.InvalidIdempotencyKeyException;
+import com.bilal.neobank.ledger.IdempotencyKeyReusedException;
+import com.bilal.neobank.ledger.InvalidIdempotencyKeyException;
 import com.bilal.neobank.ledger.InsufficientFundsException;
+import com.bilal.neobank.transfer.TransferExceptions;
 import com.bilal.neobank.auth.EmailAlreadyRegisteredException;
 import com.bilal.neobank.auth.InvalidCredentialsException;
 import org.springframework.http.HttpHeaders;
@@ -88,6 +89,36 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     ProblemDetail handleAccountTypeNotAllowed(AccountTypeNotAllowedException ex) {
         return problem(HttpStatus.BAD_REQUEST, "Account type not allowed", ex.getMessage(),
                 "ACCOUNT_TYPE_NOT_ALLOWED");
+    }
+
+    @ExceptionHandler(TransferExceptions.InvalidIbanException.class)
+    ProblemDetail handleInvalidIban(TransferExceptions.InvalidIbanException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid IBAN", ex.getMessage(), "INVALID_IBAN");
+    }
+
+    @ExceptionHandler(TransferExceptions.RecipientNotFoundException.class)
+    ProblemDetail handleRecipientNotFound(TransferExceptions.RecipientNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Recipient not found", ex.getMessage(), "RECIPIENT_NOT_FOUND");
+    }
+
+    @ExceptionHandler(TransferExceptions.RecipientUnavailableException.class)
+    ProblemDetail handleRecipientUnavailable(TransferExceptions.RecipientUnavailableException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Recipient unavailable", ex.getMessage(),
+                "RECIPIENT_UNAVAILABLE");
+    }
+
+    @ExceptionHandler(TransferExceptions.SameAccountException.class)
+    ProblemDetail handleSameAccount(TransferExceptions.SameAccountException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Same account", ex.getMessage(), "SAME_ACCOUNT");
+    }
+
+    @ExceptionHandler(TransferExceptions.DailyLimitExceededException.class)
+    ProblemDetail handleDailyLimit(TransferExceptions.DailyLimitExceededException ex) {
+        ProblemDetail problem = problem(HttpStatus.UNPROCESSABLE_ENTITY, "Daily limit exceeded", ex.getMessage(),
+                "DAILY_LIMIT_EXCEEDED");
+        problem.setProperty("dailyLimit", ex.getLimit().toPlainString());
+        problem.setProperty("remaining", ex.getRemaining().toPlainString());
+        return problem;
     }
 
     private static ProblemDetail problem(HttpStatus status, String title, String detail, String code) {

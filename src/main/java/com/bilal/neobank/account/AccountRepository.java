@@ -18,6 +18,8 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     /** Scoped by owner on purpose: callers can never load an account they do not own. */
     Optional<Account> findByIdAndUserId(UUID id, UUID userId);
 
+    Optional<Account> findByIban(String iban);
+
     long countByUserIdAndTypeAndStatusNot(UUID userId, AccountType type, AccountStatus status);
 
     @Query(value = "select nextval('account_number_seq')", nativeQuery = true)

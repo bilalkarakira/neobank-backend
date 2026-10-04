@@ -22,6 +22,12 @@ class IbanGeneratorTest {
     }
 
     @Test
+    void normalizeStripsSpacesAndUppercases() {
+        assertThat(IbanGenerator.normalize(" xx65 neob 1000\t0000 01 ")).isEqualTo("XX65NEOB1000000001");
+        assertThat(IbanGenerator.normalize(null)).isEmpty();
+    }
+
+    @Test
     void validatorAcceptsKnownRealIbansAndRejectsCorruptedOnes() {
         // published example IBANs
         assertThat(IbanGenerator.isValid("GB82WEST12345698765432")).isTrue();

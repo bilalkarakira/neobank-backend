@@ -1,4 +1,4 @@
-package com.bilal.neobank.account;
+package com.bilal.neobank.ledger;
 
 /** The same Idempotency-Key was sent with a different request: a client bug, never silently accepted. */
 public class IdempotencyKeyReusedException extends RuntimeException {

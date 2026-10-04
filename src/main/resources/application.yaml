@@ -32,3 +32,5 @@ app:
   accounts:
     max-checking: 1
     max-savings: 4
+  transfers:
+    daily-limit: 5000.00
