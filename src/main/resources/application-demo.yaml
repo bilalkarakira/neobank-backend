@@ -1,0 +1,5 @@
+# Development only (profile "demo"): a ready-made administrator next to the demo customer.
+app:
+  admin:
+    email: admin@neobank.local
+    password: AdminPassw0rd

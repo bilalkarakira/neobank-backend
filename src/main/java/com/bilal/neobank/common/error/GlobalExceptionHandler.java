@@ -11,6 +11,7 @@ import com.bilal.neobank.history.InvalidFilterException;
 import com.bilal.neobank.ledger.InsufficientFundsException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import com.bilal.neobank.admin.AdminExceptions;
 import com.bilal.neobank.recurring.RecurringExceptions;
 import com.bilal.neobank.transfer.TransferExceptions;
 import com.bilal.neobank.auth.EmailAlreadyRegisteredException;
@@ -129,6 +130,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(CategoryNotFoundException.class)
     ProblemDetail handleCategoryNotFound(CategoryNotFoundException ex) {
         return problem(HttpStatus.BAD_REQUEST, "Category not found", ex.getMessage(), "CATEGORY_NOT_FOUND");
+    }
+
+    @ExceptionHandler(AdminExceptions.InvalidStateException.class)
+    ProblemDetail handleAdminState(AdminExceptions.InvalidStateException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Account state", ex.getMessage(), "ADMIN_INVALID_STATE");
     }
 
     @ExceptionHandler(RecurringExceptions.NotFoundException.class)

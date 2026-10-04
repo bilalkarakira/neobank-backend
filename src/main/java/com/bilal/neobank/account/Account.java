@@ -67,6 +67,11 @@ public class Account {
         this.balance = this.balance.add(delta);
     }
 
+    /** Administrative status change (freeze/unfreeze); call it while holding a row lock on the account. */
+    public void changeStatus(AccountStatus newStatus) {
+        this.status = newStatus;
+    }
+
     public UUID getId() { return id; }
     public UUID getUserId() { return userId; }
     public String getIban() { return iban; }
