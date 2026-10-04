@@ -45,7 +45,7 @@ public class TransferController {
     }
 
     @GetMapping("/api/recipients/lookup")
-    public RecipientResponse lookup(@RequestParam String iban) {
-        return transferService.lookup(iban);
+    public RecipientResponse lookup(@AuthenticationPrincipal Jwt jwt, @RequestParam String iban) {
+        return transferService.lookup(UUID.fromString(jwt.getSubject()), iban);
     }
 }

@@ -26,7 +26,7 @@ public class AuthService {
     }
 
     public User register(RegisterRequest request) {
-        String email = normalize(request.email());
+        String email = normalizeEmail(request.email());
         if (userRepository.existsByEmail(email)) {
             throw new EmailAlreadyRegisteredException(email);
         }
@@ -42,7 +42,7 @@ public class AuthService {
 
     /** Returns the user if the credentials match; unknown email and wrong password are indistinguishable. */
     public User authenticate(LoginRequest request) {
-        User user = userRepository.findByEmail(normalize(request.email())).orElse(null);
+        User user = userRepository.findByEmail(normalizeEmail(request.email())).orElse(null);
         String hash = user != null ? user.getPasswordHash() : dummyHash;
         boolean matches = passwordEncoder.matches(request.password(), hash);
         if (user == null || !matches) {
@@ -51,7 +51,7 @@ public class AuthService {
         return user;
     }
 
-    private static String normalize(String email) {
+    public static String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 }

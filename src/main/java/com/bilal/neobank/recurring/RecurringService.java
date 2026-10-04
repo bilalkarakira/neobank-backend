@@ -67,7 +67,7 @@ public class RecurringService {
 
         Account source = accountService.get(userId, request.sourceAccountId()); // 404 unless theirs
         String iban = IbanGenerator.normalize(request.destinationIban());
-        transferService.lookup(iban); // valid, exists, active and not a bank-internal account
+        transferService.lookup(userId, iban); // valid, exists, active and not a bank-internal account
         if (iban.equals(source.getIban())) {
             throw new SameAccountException();
         }

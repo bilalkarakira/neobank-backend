@@ -13,6 +13,7 @@ import org.springframework.beans.TypeMismatchException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import com.bilal.neobank.admin.AdminExceptions;
 import com.bilal.neobank.auth.MissingCsrfHeaderException;
+import com.bilal.neobank.ratelimit.RateLimitExceededException;
 import com.bilal.neobank.recurring.RecurringExceptions;
 import com.bilal.neobank.transfer.TransferExceptions;
 import com.bilal.neobank.auth.EmailAlreadyRegisteredException;
@@ -131,6 +132,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(CategoryNotFoundException.class)
     ProblemDetail handleCategoryNotFound(CategoryNotFoundException ex) {
         return problem(HttpStatus.BAD_REQUEST, "Category not found", ex.getMessage(), "CATEGORY_NOT_FOUND");
+    }
+
+    /** 429 with Retry-After (seconds). The same shape for every limit, so a client can handle them all alike. */
+    @ExceptionHandler(RateLimitExceededException.class)
+    ResponseEntity<ProblemDetail> handleRateLimit(RateLimitExceededException ex) {
+        boolean login = RateLimitExceededException.TOO_MANY_LOGIN_ATTEMPTS.equals(ex.getCode());
+        ProblemDetail problem = problem(HttpStatus.TOO_MANY_REQUESTS, login ? "Too many login attempts" : "Too many requests",
+                ex.getMessage(), ex.getCode());
+        problem.setProperty("retryAfterSeconds", ex.getRetryAfterSeconds());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .contentType(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON).body(problem);
     }
 
     @ExceptionHandler(MissingCsrfHeaderException.class)

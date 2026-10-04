@@ -33,6 +33,16 @@ app:
       reuse-grace: 10s    # a just-rotated token presented again (two tabs) is refused without ending the login
       cookie-secure: ${REFRESH_COOKIE_SECURE:false}   # MUST be true behind HTTPS in production
       scheduler-enabled: true
+    rate-limit:
+      scheduler-enabled: true
+      # failed passwords per email (known or not): lock for lock-duration, even against the right password
+      login: { max-failures: 5, failure-window: 15m, lock-duration: 15m }
+      login-per-ip: { limit: 20, window: 1m }
+      refresh-per-ip: { limit: 30, window: 1m }
+      register-per-ip: { limit: 10, window: 1h }
+      lookup-per-user: { limit: 20, window: 1m }
+      # unknown/invalid IBANs tried through lookup or transfer: the sign of someone enumerating accounts
+      probe-misses: { limit: 10, window: 10m }
     cors:
       allowed-origins: http://localhost:4200
   accounts:

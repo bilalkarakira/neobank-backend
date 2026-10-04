@@ -12,6 +12,7 @@ import com.bilal.neobank.ledger.Fingerprint;
 import com.bilal.neobank.ledger.IdempotentTransactions;
 import com.bilal.neobank.ledger.LedgerEntryRepository;
 import com.bilal.neobank.ledger.LedgerTransaction;
+import com.bilal.neobank.ratelimit.RecipientProbeGuard;
 import com.bilal.neobank.transfer.TransferExceptions.InvalidIbanException;
 import com.bilal.neobank.transfer.TransferExceptions.RecipientNotFoundException;
 import com.bilal.neobank.transfer.TransferExceptions.RecipientUnavailableException;
@@ -41,10 +42,12 @@ public class TransferService {
     private final IdempotentTransactions idempotent;
     private final TransferExecutor executor;
     private final CategoryRepository categoryRepository;
+    private final RecipientProbeGuard probeGuard;
 
     public TransferService(AccountService accountService, AccountRepository accountRepository,
             UserRepository userRepository, LedgerEntryRepository entryRepository, IdempotentTransactions idempotent,
-            TransferExecutor executor, CategoryRepository categoryRepository) {
+            TransferExecutor executor, CategoryRepository categoryRepository, RecipientProbeGuard probeGuard) {
+        this.probeGuard = probeGuard;
         this.accountService = accountService;
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
@@ -56,13 +59,15 @@ public class TransferService {
 
     public Result transfer(UUID userId, String idempotencyKey, TransferRequest request) {
         IdempotentTransactions.requireValidKey(idempotencyKey);
+        probeGuard.beforeTransfer(userId);
         String iban = IbanGenerator.normalize(request.destinationIban());
         if (!IbanGenerator.isValid(iban)) {
+            probeGuard.recordMiss(userId);
             throw new InvalidIbanException();
         }
 
         Account source = accountService.get(userId, request.sourceAccountId()); // 404 unless the caller owns it
-        Account destination = findRecipient(iban);
+        Account destination = findRecipient(userId, iban);
         if (destination.getId().equals(source.getId())) {
             throw new SameAccountException();
         }
@@ -85,25 +90,29 @@ public class TransferService {
     }
 
     /** For the "is this who you mean?" confirmation: first name and last initial only. */
-    public RecipientResponse lookup(String rawIban) {
+    public RecipientResponse lookup(UUID userId, String rawIban) {
+        probeGuard.beforeLookup(userId);
         String iban = IbanGenerator.normalize(rawIban);
         if (!IbanGenerator.isValid(iban)) {
+            probeGuard.recordMiss(userId);
             throw new InvalidIbanException();
         }
-        Account account = findRecipient(iban);
+        Account account = findRecipient(userId, iban);
         if (account.getStatus() != AccountStatus.ACTIVE) {
             throw new RecipientUnavailableException();
         }
-        User owner = userRepository.findById(account.getUserId()).orElseThrow(RecipientNotFoundException::new);
-        String initial = owner.getLastName().isEmpty() ? "" : " " + owner.getLastName().charAt(0) + ".";
+        User owner = userRepository.findById(account.getUserId()).orElseThrow(RecipientNotFoundException::new);        String initial = owner.getLastName().isEmpty() ? "" : " " + owner.getLastName().charAt(0) + ".";
         return new RecipientResponse(account.getIban(), owner.getFirstName() + initial);
     }
 
     /** Bank-internal accounts are never valid recipients, and are indistinguishable from "no such IBAN". */
-    private Account findRecipient(String iban) {
+    private Account findRecipient(UUID userId, String iban) {
         return accountRepository.findByIban(iban)
                 .filter(account -> account.getType() != AccountType.SYSTEM)
-                .orElseThrow(RecipientNotFoundException::new);
+                .orElseThrow(() -> {
+                    probeGuard.recordMiss(userId); // an IBAN that does not exist counts toward the probing limit
+                    return new RecipientNotFoundException();
+                });
     }
 
     private TransferResponse toResponse(LedgerTransaction transaction) {

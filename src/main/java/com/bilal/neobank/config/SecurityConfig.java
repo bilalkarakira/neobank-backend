@@ -68,7 +68,7 @@ public class SecurityConfig {
         // the refresh cookie must be accepted from the (explicitly listed) app origin; wildcards are not allowed with this
         config.setAllowCredentials(true);
         // so a browser app on another origin can read the CSV download's filename and truncation flag
-        config.setExposedHeaders(List.of("Content-Disposition", "X-Export-Truncated"));
+        config.setExposedHeaders(List.of("Content-Disposition", "X-Export-Truncated", "Retry-After"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
         return source;
