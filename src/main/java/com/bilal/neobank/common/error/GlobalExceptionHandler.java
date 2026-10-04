@@ -12,6 +12,7 @@ import com.bilal.neobank.ledger.InsufficientFundsException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import com.bilal.neobank.admin.AdminExceptions;
+import com.bilal.neobank.auth.MissingCsrfHeaderException;
 import com.bilal.neobank.recurring.RecurringExceptions;
 import com.bilal.neobank.transfer.TransferExceptions;
 import com.bilal.neobank.auth.EmailAlreadyRegisteredException;
@@ -130,6 +131,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(CategoryNotFoundException.class)
     ProblemDetail handleCategoryNotFound(CategoryNotFoundException ex) {
         return problem(HttpStatus.BAD_REQUEST, "Category not found", ex.getMessage(), "CATEGORY_NOT_FOUND");
+    }
+
+    @ExceptionHandler(MissingCsrfHeaderException.class)
+    ProblemDetail handleMissingCsrfHeader(MissingCsrfHeaderException ex) {
+        return problem(HttpStatus.FORBIDDEN, "Request not allowed", ex.getMessage(), "CSRF_HEADER_REQUIRED");
     }
 
     @ExceptionHandler(AdminExceptions.InvalidStateException.class)

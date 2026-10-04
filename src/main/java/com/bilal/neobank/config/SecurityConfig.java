@@ -32,7 +32,10 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        // refresh and logout are authenticated by the refresh cookie (checked in the controller),
+                        // because the access token is exactly what is missing when they are needed
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login",
+                                "/api/auth/refresh", "/api/auth/logout").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
@@ -61,7 +64,9 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key", "X-Requested-With"));
+        // the refresh cookie must be accepted from the (explicitly listed) app origin; wildcards are not allowed with this
+        config.setAllowCredentials(true);
         // so a browser app on another origin can read the CSV download's filename and truncation flag
         config.setExposedHeaders(List.of("Content-Disposition", "X-Export-Truncated"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

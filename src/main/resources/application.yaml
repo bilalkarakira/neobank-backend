@@ -27,6 +27,12 @@ app:
       # DEV ONLY default. Override with the JWT_SECRET env var (min 32 bytes) everywhere else.
       secret: ${JWT_SECRET:dev-only-secret-change-me-dev-only-secret-0123456789}
       ttl: 15m
+    refresh:
+      ttl: 7d             # one refresh token; every use renews it (rotation)
+      max-lifetime: 30d   # a login can never last longer than this, however active
+      reuse-grace: 10s    # a just-rotated token presented again (two tabs) is refused without ending the login
+      cookie-secure: ${REFRESH_COOKIE_SECURE:false}   # MUST be true behind HTTPS in production
+      scheduler-enabled: true
     cors:
       allowed-origins: http://localhost:4200
   accounts:
