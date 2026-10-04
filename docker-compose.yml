@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: neobank-postgres
+    environment:
+      POSTGRES_DB: neobank
+      POSTGRES_USER: neobank
+      POSTGRES_PASSWORD: neobank
+    ports:
+      - "5433:5432"
+    volumes:
+      - neobank-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neobank -d neobank"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: neobank-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@neobank.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  neobank-pgdata:
