@@ -29,3 +29,6 @@ app:
       ttl: 15m
     cors:
       allowed-origins: http://localhost:4200
+  accounts:
+    max-checking: 1
+    max-savings: 4

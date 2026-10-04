@@ -29,8 +29,12 @@ class AuthControllerTest {
     @Autowired
     UserRepository userRepository;
 
+    @Autowired
+    com.bilal.neobank.account.AccountRepository accountRepository;
+
     @BeforeEach
     void clean() {
+        accountRepository.deleteAll();
         userRepository.deleteAll();
     }
 

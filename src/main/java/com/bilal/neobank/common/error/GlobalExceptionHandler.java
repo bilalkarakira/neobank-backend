@@ -1,5 +1,7 @@
 package com.bilal.neobank.common.error;
 
+import com.bilal.neobank.account.AccountLimitReachedException;
+import com.bilal.neobank.account.AccountNotFoundException;
 import com.bilal.neobank.auth.EmailAlreadyRegisteredException;
 import com.bilal.neobank.auth.InvalidCredentialsException;
 import org.springframework.http.HttpHeaders;
@@ -34,6 +36,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Invalid email or password.");
         problem.setTitle("Invalid credentials");
         problem.setProperty("code", "INVALID_CREDENTIALS");
+        return problem;
+    }
+
+    @ExceptionHandler(AccountLimitReachedException.class)
+    ProblemDetail handleAccountLimit(AccountLimitReachedException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+        problem.setTitle("Account limit reached");
+        problem.setProperty("code", "ACCOUNT_LIMIT_REACHED");
+        return problem;
+    }
+
+    @ExceptionHandler(AccountNotFoundException.class)
+    ProblemDetail handleAccountNotFound(AccountNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Account not found.");
+        problem.setTitle("Account not found");
+        problem.setProperty("code", "ACCOUNT_NOT_FOUND");
         return problem;
     }
 
