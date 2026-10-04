@@ -36,6 +36,12 @@ app:
     daily-limit: 5000.00
   history:
     export-max-rows: 10000
+  recurring:
+    scheduler-enabled: true
+    cron: "0 5 * * * *"   # hourly at :05 UTC; a missed run is picked up by the next pass
+    max-open: 10          # active + paused standing orders per user
+    max-failures: 3       # consecutive failed runs before an order pauses itself
+    max-catch-up: 31      # scheduled dates one order may run in a single pass (after downtime)
   interest:
     apy: 0.035            # 3.5% effective yearly rate, one flat rate for every savings account
     scheduler-enabled: true

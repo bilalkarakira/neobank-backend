@@ -11,6 +11,7 @@ import com.bilal.neobank.history.InvalidFilterException;
 import com.bilal.neobank.ledger.InsufficientFundsException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import com.bilal.neobank.recurring.RecurringExceptions;
 import com.bilal.neobank.transfer.TransferExceptions;
 import com.bilal.neobank.auth.EmailAlreadyRegisteredException;
 import com.bilal.neobank.auth.InvalidCredentialsException;
@@ -128,6 +129,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(CategoryNotFoundException.class)
     ProblemDetail handleCategoryNotFound(CategoryNotFoundException ex) {
         return problem(HttpStatus.BAD_REQUEST, "Category not found", ex.getMessage(), "CATEGORY_NOT_FOUND");
+    }
+
+    @ExceptionHandler(RecurringExceptions.NotFoundException.class)
+    ProblemDetail handleRecurringNotFound(RecurringExceptions.NotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Recurring payment not found", ex.getMessage(), "RECURRING_NOT_FOUND");
+    }
+
+    @ExceptionHandler(RecurringExceptions.LimitReachedException.class)
+    ProblemDetail handleRecurringLimit(RecurringExceptions.LimitReachedException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Recurring payment limit reached", ex.getMessage(),
+                "RECURRING_LIMIT_REACHED");
+    }
+
+    @ExceptionHandler(RecurringExceptions.InvalidStateException.class)
+    ProblemDetail handleRecurringState(RecurringExceptions.InvalidStateException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Recurring payment state", ex.getMessage(),
+                "RECURRING_INVALID_STATE");
+    }
+
+    @ExceptionHandler(RecurringExceptions.InvalidScheduleException.class)
+    ProblemDetail handleRecurringSchedule(RecurringExceptions.InvalidScheduleException ex) {
+        return validationProblem(ex.getFields());
     }
 
     @ExceptionHandler(InvalidFilterException.class)
