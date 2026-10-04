@@ -46,19 +46,21 @@ public class AnalyticsRepository {
      * (an account with no entry yet counts as zero).
      */
     public List<DailyBalance> dailyBalances(Collection<UUID> accountIds, LocalDate start, LocalDate end) {
+        // The days come from integer offsets and DATE arithmetic (start + n), never from a timestamp series: a
+        // "+ 1 day" step on timestamps is 23 or 25 hours across a daylight-saving change in the session time zone.
         return jdbc.sql("""
-                select d.day::date as day, coalesce(sum(b.balance_after), 0) as balance
-                from generate_series(cast(:start as date), cast(:end as date), interval '1 day') as d(day)
+                select (cast(:start as date) + g.n) as day, coalesce(sum(b.balance_after), 0) as balance
+                from generate_series(0, cast(:end as date) - cast(:start as date)) as g(n)
                 cross join (select id from accounts where id in (:ids)) a
                 left join lateral (
                     select e.balance_after from ledger_entries e
                     where e.account_id = a.id
-                      and e.created_at < (((d.day::date + 1))::timestamp at time zone 'UTC')
+                      and e.created_at < ((cast(:start as date) + g.n + 1)::timestamp at time zone 'UTC')
                     order by e.created_at desc, e.id desc
                     limit 1
                 ) b on true
-                group by d.day
-                order by d.day
+                group by g.n
+                order by g.n
                 """)
                 .param("start", start).param("end", end).param("ids", accountIds)
                 .query((rs, i) -> new DailyBalance(rs.getObject("day", LocalDate.class), rs.getBigDecimal("balance")))
