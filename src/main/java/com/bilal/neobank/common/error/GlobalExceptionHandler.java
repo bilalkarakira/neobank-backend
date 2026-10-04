@@ -1,6 +1,7 @@
 package com.bilal.neobank.common.error;
 
 import com.bilal.neobank.auth.EmailAlreadyRegisteredException;
+import com.bilal.neobank.auth.InvalidCredentialsException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -25,6 +26,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Email is already registered.");
         problem.setTitle("Email already registered");
         problem.setProperty("code", "EMAIL_ALREADY_REGISTERED");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    ProblemDetail handleInvalidCredentials(InvalidCredentialsException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Invalid email or password.");
+        problem.setTitle("Invalid credentials");
+        problem.setProperty("code", "INVALID_CREDENTIALS");
         return problem;
     }
 
