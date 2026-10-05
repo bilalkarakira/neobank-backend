@@ -196,11 +196,19 @@ public class AdminService {
                 probingBlocks());
     }
 
-    /** Users whose misses in the current window have reached the limit, with the time the window (and block) ends. */
+    /**
+     * Users whose recent misses (over the last window-length, estimated the same way the limiter judges them) are at
+     * the limit, with the moment each will be let through again if they do nothing more.
+     */
     private List<ProbingBlock> probingBlocks() {
         RateLimitProperties.Window probe = rateLimits.probeMisses();
-        Instant start = rateLimiter.windowStart(probe.window());
-        return repository.probingBlocks(at(start), probe.limit(), at(start.plus(probe.window())));
+        List<ProbingBlock> blocks = new java.util.ArrayList<>();
+        for (RateLimiter.Blocked blocked : rateLimiter.blocked("probe:", probe)) {
+            UUID userId = UUID.fromString(blocked.key().substring("probe:".length()));
+            repository.userEmail(userId).ifPresent(email -> blocks.add(
+                    new ProbingBlock(userId, email, (int) Math.round(blocked.estimate()), blocked.until())));
+        }
+        return blocks;
     }
 
     /**
@@ -217,18 +225,22 @@ public class AdminService {
         repository.insertAction(adminId, "UNLOCK_LOGIN", null, reason.trim(), "email=" + normalized, now());
     }
 
-    /** Lifts a probing block: clears this user's miss and lookup counters for the current windows. */
+    /**
+     * Lifts a probing block: forgets this user's recent misses and lookups (the current AND the previous window, since a
+     * sliding window still counts the previous one). The deletes run in this transaction, so they are as atomic with the
+     * audit row as every other admin change.
+     */
     @Transactional
     public void clearProbingBlock(UUID adminId, UUID userId, String reason) {
         RateLimitProperties.Window probe = rateLimits.probeMisses();
         String email = repository.userEmail(userId).orElseThrow(AdminExceptions.NotBlockedException::new);
         String probeKey = "probe:" + userId;
-        if (rateLimiter.current(probeKey, probe.window()) < probe.limit()) {
+        if (rateLimiter.estimate(probeKey, probe.window()) < probe.limit() - 1e-9) {
             throw new AdminExceptions.NotBlockedException(); // below the limit: there is no block to lift
         }
-        repository.deleteCounter(probeKey, at(rateLimiter.windowStart(probe.window())));
+        repository.deleteCounters(probeKey, at(rateLimiter.windowStart(probe.window()).minus(probe.window())));
         Duration lookupWindow = rateLimits.lookupPerUser().window();
-        repository.deleteCounter("lookup:" + userId, at(rateLimiter.windowStart(lookupWindow)));
+        repository.deleteCounters("lookup:" + userId, at(rateLimiter.windowStart(lookupWindow).minus(lookupWindow)));
         repository.insertAction(adminId, "CLEAR_PROBING_BLOCK", null, reason.trim(), "user=" + email, now());
     }
 

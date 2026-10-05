@@ -7,6 +7,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.Duration;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -26,7 +27,7 @@ class RateLimitFlowTest extends RateLimitTestBase {
 
         assertThat(statusOf(refused)).isEqualTo(429);
         assertThat(codeOf(refused)).isEqualTo("RATE_LIMITED");
-        assertThat(retryAfter(refused)).isEqualTo("60");
+        assertThat(retryAfter(refused)).isEqualTo("63"); // 60 s to the rollover, then 20 x (1 - t/60) <= 19 needs 3 s more
         assertThat(statusOf(login("ghost22@example.com", WRONG, IP_B))).isEqualTo(401); // another address is unaffected
     }
 
@@ -40,14 +41,47 @@ class RateLimitFlowTest extends RateLimitTestBase {
     }
 
     @Test
+    void aBurstAtTheEndOfAMinuteIsNotFollowedByAFreshAllowanceAtTheStartOfTheNext() throws Exception {
+        clock.set(START.plusSeconds(59)); // 12:00:59
+        for (int i = 0; i < 20; i++) {
+            assertThat(statusOf(login("ghost" + i + "@example.com", WRONG, IP_A))).isEqualTo(401);
+        }
+
+        after(Duration.ofSeconds(1)); // 12:01:00: with fixed windows this address would be given 20 more at once
+        assertThat(statusOf(login("burst@example.com", WRONG, IP_A))).isEqualTo(429);
+        after(Duration.ofSeconds(2)); // 12:01:02
+        assertThat(statusOf(login("burst@example.com", WRONG, IP_A))).isEqualTo(429);
+        after(Duration.ofSeconds(1)); // 12:01:03: 20 x (1 - 3/60) = 19, plus this one
+        assertThat(statusOf(login("burst@example.com", WRONG, IP_A))).isEqualTo(401);
+    }
+
+    @Test
+    void waitingExactlyTheAdvertisedRetryAfterWorksOverHttpAndOneSecondLessDoesNot() throws Exception {
+        for (int i = 0; i < 30; i++) {
+            assertThat(statusOf(refresh(IP_A))).isEqualTo(401);
+        }
+        MvcResult refused = refresh(IP_A);
+        long wait = Long.parseLong(retryAfter(refused));
+        assertThat(wait).isEqualTo(62); // 60 s to the rollover, then 30 x (1 - t/60) <= 29 needs 2 s more
+
+        Instant at = clock.instant();
+        clock.set(at.plusSeconds(wait - 1));
+        assertThat(statusOf(refresh(IP_A))).isEqualTo(429);
+        clock.set(at.plusSeconds(wait));
+        assertThat(statusOf(refresh(IP_A))).isEqualTo(401); // through the limiter again (no cookie: an ordinary refusal)
+    }
+
+    @Test
     void theLoginWindowReopensAfterAMinuteAndRetryAfterCountsDown() throws Exception {
         for (int i = 0; i < 20; i++) {
             login("ghost" + i + "@example.com", WRONG, IP_A);
         }
         after(Duration.ofSeconds(25));
-        assertThat(retryAfter(login("late@example.com", WRONG, IP_A))).isEqualTo("35");
+        assertThat(retryAfter(login("late@example.com", WRONG, IP_A))).isEqualTo("38"); // (60 - 25) + 3
 
-        after(Duration.ofSeconds(35));
+        after(Duration.ofSeconds(37));
+        assertThat(statusOf(login("late@example.com", WRONG, IP_A))).isEqualTo(429); // one second early: still no
+        after(Duration.ofSeconds(1));
 
         assertThat(statusOf(login("late@example.com", WRONG, IP_A))).isEqualTo(401);
     }
@@ -82,9 +116,11 @@ class RateLimitFlowTest extends RateLimitTestBase {
         MvcResult refused = register("user11@example.com", IP_A);
 
         assertThat(statusOf(refused)).isEqualTo(429);
-        assertThat(retryAfter(refused)).isEqualTo("3600");
+        assertThat(retryAfter(refused)).isEqualTo("3960"); // 3600 s to the rollover, then 10 x (1 - t/3600) <= 9 needs 360 s more
         assertThat(statusOf(register("user11@example.com", IP_B))).isEqualTo(201);
-        after(Duration.ofHours(1));
+        after(Duration.ofHours(1)); // a fixed window would have reopened here; a sliding one has not forgotten yet
+        assertThat(statusOf(register("user12@example.com", IP_A))).isEqualTo(429);
+        after(Duration.ofSeconds(360));
         assertThat(statusOf(register("user12@example.com", IP_A))).isEqualTo(201);
     }
 
@@ -119,7 +155,10 @@ class RateLimitFlowTest extends RateLimitTestBase {
 
         assertThat(statusOf(refused)).isEqualTo(429);
         assertThat(codeOf(refused)).isEqualTo("RATE_LIMITED");
+        assertThat(retryAfter(refused)).isEqualTo("63");
         after(Duration.ofMinutes(1));
+        assertThat(statusOf(lookup(alice, iban))).isEqualTo(429); // not yet: the earlier lookups have not slid out
+        after(Duration.ofSeconds(3));
         assertThat(statusOf(lookup(alice, iban))).isEqualTo(200);
     }
 
@@ -148,9 +187,11 @@ class RateLimitFlowTest extends RateLimitTestBase {
         MvcResult blocked = lookup(alice, realIban);
 
         assertThat(statusOf(blocked)).isEqualTo(429);
-        assertThat(retryAfter(blocked)).isEqualTo("600"); // the 10-minute probing window
+        assertThat(retryAfter(blocked)).isEqualTo("601"); // 600 s, then a millisecond of margin: the block lifts when strictly below
         assertThat(statusOf(lookup(bob, realIban))).isEqualTo(200); // another user is not punished
         after(Duration.ofMinutes(10));
+        assertThat(statusOf(lookup(alice, realIban))).isEqualTo(429); // the ten misses are only now beginning to slide out
+        after(Duration.ofSeconds(1));
         assertThat(statusOf(lookup(alice, realIban))).isEqualTo(200);
     }
 

@@ -122,20 +122,10 @@ public class AdminRepository {
                 .param("hash", emailHash).param("now", now).update();
     }
 
-    /** Users whose miss counter in the CURRENT window has reached the limit. */
-    public List<AdminDtos.ProbingBlock> probingBlocks(OffsetDateTime windowStart, int limit, OffsetDateTime blockedUntil) {
-        return jdbc.sql("""
-                select u.id, u.email, r.hits from rate_limits r join users u on r.bucket_key = 'probe:' || u.id::text
-                where r.window_start = :start and r.hits >= :limit order by r.hits desc, u.email
-                """).param("start", windowStart).param("limit", limit)
-                .query((rs, i) -> new AdminDtos.ProbingBlock(rs.getObject("id", UUID.class), rs.getString("email"),
-                        rs.getInt("hits"), blockedUntil.toInstant()))
-                .list();
-    }
-
-    public int deleteCounter(String bucketKey, OffsetDateTime windowStart) {
-        return jdbc.sql("delete from rate_limits where bucket_key = :key and window_start = :start")
-                .param("key", bucketKey).param("start", windowStart).update();
+    /** Forgets a key's counters from {@code earliestStart} on, i.e. the previous and the current window. */
+    public int deleteCounters(String bucketKey, OffsetDateTime earliestStart) {
+        return jdbc.sql("delete from rate_limits where bucket_key = :key and window_start >= :earliest")
+                .param("key", bucketKey).param("earliest", earliestStart).update();
     }
 
     public Optional<String> userEmail(UUID userId) {

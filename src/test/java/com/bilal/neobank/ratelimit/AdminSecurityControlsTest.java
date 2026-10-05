@@ -238,7 +238,7 @@ class AdminSecurityControlsTest extends RateLimitTestBase {
     // ---- probing blocks ---------------------------------------------------------------------------------------
 
     @Test
-    void aProbingBlockIsListedUntilItsWindowEnds() throws Exception {
+    void aProbingBlockIsListedUntilTheMissesHaveSlidOutBelowTheLimit() throws Exception {
         String admin = adminBearer();
         String alice = bearerFor("alice@example.com");
         blockForProbing(alice);
@@ -247,9 +247,11 @@ class AdminSecurityControlsTest extends RateLimitTestBase {
                 .andExpect(jsonPath("$.probingBlocks[0].email").value("alice@example.com"))
                 .andExpect(jsonPath("$.probingBlocks[0].userId").value(userId("alice@example.com")))
                 .andExpect(jsonPath("$.probingBlocks[0].misses").value(10))
-                .andExpect(jsonPath("$.probingBlocks[0].blockedUntil").value("2026-10-04T12:10:00Z"));
+                .andExpect(jsonPath("$.probingBlocks[0].blockedUntil").value("2026-10-04T12:10:01Z")); // 600 s + the margin
 
-        after(Duration.ofMinutes(10));
+        after(Duration.ofMinutes(10)); // the misses are only now beginning to slide out: still blocked
+        snapshot(admin).andExpect(jsonPath("$.probingBlocks.length()").value(1));
+        after(Duration.ofSeconds(1));
         snapshot(admin).andExpect(jsonPath("$.probingBlocks.length()").value(0));
     }
 
@@ -269,6 +271,24 @@ class AdminSecurityControlsTest extends RateLimitTestBase {
         send(get("/api/admin/audit"), admin, null).andExpect(jsonPath("$[0].action").value("CLEAR_PROBING_BLOCK"))
                 .andExpect(jsonPath("$[0].reason").value("Customer verified by phone"))
                 .andExpect(jsonPath("$[0].detail").value("user=alice@example.com"));
+    }
+
+    @Test
+    void clearingAlsoForgetsMissesFromThePreviousWindowBecauseASlidingWindowStillCountsThem() throws Exception {
+        String admin = adminBearer();
+        String alice = bearerFor("alice@example.com");
+        String bobIban = JsonPath.read(openAccount(bearerFor("bob@example.com")), "$.iban");
+        clock.set(START.plusSeconds(599)); // 12:09:59: the last second of the 10-minute window
+        blockForProbing(alice);
+        clock.set(START.plusSeconds(600)); // 12:10:00: a new window; the ten misses sit in the previous one, still at full weight
+        assertThat(statusOf(lookup(alice, bobIban))).isEqualTo(429);
+        snapshot(admin).andExpect(jsonPath("$.probingBlocks.length()").value(1));
+
+        send(post("/api/admin/security/probing-blocks/" + userId("alice@example.com") + "/clear"), admin, REASON)
+                .andExpect(status().isNoContent());
+
+        assertThat(statusOf(lookup(alice, bobIban))).isEqualTo(200); // really lifted, not just in the current window
+        snapshot(admin).andExpect(jsonPath("$.probingBlocks.length()").value(0));
     }
 
     @Test
