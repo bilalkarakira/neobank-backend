@@ -189,6 +189,13 @@ public class AdminService {
         return repository.recentActions(AUDIT_LIMIT);
     }
 
+    /** The newest administrator actions about one customer. Reading the trail is not itself an audited action. */
+    @Transactional(readOnly = true)
+    public List<AuditEntry> customerAudit(UUID userId) {
+        var profile = repository.findCustomer(userId).orElseThrow(AdminExceptions.CustomerNotFoundException::new);
+        return repository.actionsAboutCustomer(userId, profile.email(), AUDIT_LIMIT);
+    }
+
     @Transactional(readOnly = true)
     public SecuritySnapshot security() {
         OffsetDateTime now = now();

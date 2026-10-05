@@ -212,6 +212,25 @@ public class AdminRepository {
                 .list();
     }
 
+    /**
+     * Everything an administrator did that concerns this customer: actions on one of their accounts, plus the actions
+     * that name them by email (viewing the customer, unlocking their login, clearing a probing block).
+     */
+    public List<AuditEntry> actionsAboutCustomer(UUID userId, String email, int limit) {
+        return jdbc.sql("""
+                select x.id, x.created_at, u.email admin_email, x.action, a.iban, x.reason, x.detail
+                from admin_actions x join users u on u.id = x.admin_id left join accounts a on a.id = x.account_id
+                where a.user_id = :user or x.detail in (:viewed, :named)
+                order by x.created_at desc, x.id desc limit :limit
+                """).param("user", userId).param("viewed", "email=" + email).param("named", "user=" + email)
+                .param("limit", limit)
+                .query((rs, i) -> new AuditEntry(rs.getLong("id"),
+                        rs.getObject("created_at", OffsetDateTime.class).toInstant(), rs.getString("admin_email"),
+                        rs.getString("action"), rs.getString("iban"), rs.getString("reason"),
+                        rs.getString("detail")))
+                .list();
+    }
+
     private record Filter(String where, Map<String, Object> params) {
     }
 

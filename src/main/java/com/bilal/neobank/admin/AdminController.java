@@ -72,6 +72,12 @@ public class AdminController {
         return service.customer(UUID.fromString(jwt.getSubject()), userId);
     }
 
+    /** What administrators have done about this customer, newest first. */
+    @GetMapping("/api/admin/customers/{userId}/audit")
+    public List<AuditEntry> customerAudit(@PathVariable UUID userId) {
+        return service.customerAudit(userId);
+    }
+
     @PostMapping("/api/admin/accounts/{id}/unfreeze")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void unfreeze(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
