@@ -3,16 +3,38 @@
 A simulated card network around NeoBank, built to show how a card payment really moves: ISO 8583 messages in real time,
 then clearing and settlement files later. NeoBank (the sibling `neobank-backend` project) is the issuer.
 
-Status: phase P1 (the ISO 8583 codec). See `../docs/PLAN-card-network.md` for the whole plan.
+Status: phases P1 (the ISO 8583 codec) and P3 (network switch, acquirer, virtual POS) are built. See `../docs/PLAN-card-network.md` for the whole plan and `../docs/SPEC-P3-network.md` for how the three processes behave.
 
 ## Modules
 
 | Module | What it is |
 |---|---|
-| `iso8583` | ISO 8583:1987 codec (ASCII variant), TCP framing, message inspector. No dependencies. |
+| `iso8583` | ISO 8583:1987 codec (ASCII variant), TCP framing, message inspector, PIN block. No dependencies. |
+| `shared` | PAN vault (AES-GCM), database and migrations (Flyway), message builders, the durable reversal queue, test doubles (a fake issuer, a throwaway database). |
+| `network` | The card network switch: BIN routing, issuer link, timeouts, stand-in processing, advices, control API. Runs as its own process. |
+| `acquirer` | The acquirer and the virtual POS web console. Runs as its own process. |
 
 The wire format is specified in [docs/ISO8583-spec.md](docs/ISO8583-spec.md). It follows ISO 8583:1987 and common field usage;
 Visa and Mastercard profiles are proprietary, so this is **not** a scheme specification and makes no certification claim.
+
+## Run the whole chain
+
+Needs Docker Postgres (the `neobank-postgres` container of the backend) and the NeoBank backend running with the `demo` profile
+(its ISO 8583 interface listens on 127.0.0.1:8583). One-off: `docker exec neobank-postgres psql -U neobank -d postgres -c "create database cardnet"`.
+
+```bash
+./mvnw.cmd install                                              # builds and tests everything
+java -jar network/target/network-0.1.0-SNAPSHOT.jar      # network: acquirers on :8601, control API on :9100, route 999900 -> :8583
+java -jar acquirer/target/acquirer-0.1.0-SNAPSHOT.jar           # acquirer + virtual POS on http://127.0.0.1:9000
+```
+
+Settings are CARDNET_* environment variables (ports, routes, timeouts, database, `CARDNET_VAULT_KEY` which both processes must share).
+Everything listens on 127.0.0.1 only, without TLS or authentication: this is a simulation with test numbers.
+
+Things to try in the POS console: pay with the demo card; a wrong PIN; the casino (blocked category); "Send last again" (a duplicate);
+"Void" an approved payment; switch NeoBank off in the network panel and pay a small amount (the network approves by itself, then tells NeoBank
+when it is back); hold NeoBank's answers back for 4000 ms (a slow bank: the network answers on its own, then undoes the late approval);
+hold the network's answers back for 7000 ms (the acquirer gives up, cancels, and retries its reversal until it is confirmed).
 
 ## Build and test
 

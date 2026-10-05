@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual POS</title>
+<style>
+  :root { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f8fafc; --card:#fff; --brand:#0f766e; --brand-d:#115e59; --ok:#047857; --okbg:#ecfdf5; --bad:#b91c1c; --badbg:#fef2f2; --warn:#b45309; --warnbg:#fffbeb; --info:#1d4ed8; --infobg:#eff6ff; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e2e8f0; --muted:#94a3b8; --line:#334155; --bg:#0b1220; --card:#111a2e; --brand:#2dd4bf; --brand-d:#5eead4; --ok:#6ee7b7; --okbg:#052e22; --bad:#fca5a5; --badbg:#3b0d0d; --warn:#fcd34d; --warnbg:#3a2a05; --info:#93c5fd; --infobg:#0b1b3a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+  header { padding:16px 20px; border-bottom:1px solid var(--line); background:var(--card); }
+  header h1 { margin:0; font-size:20px; }
+  header p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+  main { max-width:1100px; margin:0 auto; padding:16px; display:grid; gap:16px; grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0,1fr); } }
+  section { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  section.wide { grid-column: 1 / -1; }
+  h2 { margin:0 0 10px; font-size:16px; }
+  label { display:block; font-size:13px; font-weight:600; margin:10px 0 4px; }
+  input, select { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--ink); font:inherit; }
+  input:focus, select:focus, button:focus-visible { outline:3px solid color-mix(in srgb, var(--brand) 40%, transparent); outline-offset:1px; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  button { padding:9px 14px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--ink); font:inherit; font-weight:600; cursor:pointer; }
+  button.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark) { button.primary { color:#042f2e; } }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .chip { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+  .APPROVED { background:var(--okbg); color:var(--ok); } .DECLINED, .REVERSAL_FAILED { background:var(--badbg); color:var(--bad); }
+  .REVERSING, .PENDING { background:var(--warnbg); color:var(--warn); } .REVERSED { background:var(--infobg); color:var(--info); }
+  .banner { padding:10px 12px; border-radius:10px; margin-bottom:10px; font-weight:600; }
+  .banner.APPROVED { background:var(--okbg); color:var(--ok); } .banner.DECLINED { background:var(--badbg); color:var(--bad); }
+  .banner.REVERSING { background:var(--warnbg); color:var(--warn); } .banner.error { background:var(--badbg); color:var(--bad); } .banner.info { background:var(--infobg); color:var(--info); }
+  pre { margin:6px 0 12px; padding:10px; background:var(--bg); border:1px solid var(--line); border-radius:10px; overflow:auto; font:12px/1.4 ui-monospace,Menlo,Consolas,monospace; max-height:280px; }
+  details { margin-top:8px; } summary { cursor:pointer; font-weight:600; }
+  table { width:100%; border-collapse:collapse; font-size:13px; } th, td { text-align:left; padding:7px 8px; border-top:1px solid var(--line); vertical-align:top; } th { color:var(--muted); font-weight:600; border-top:0; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .muted { color:var(--muted); font-size:13px; } .mono { font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .status-line { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; background:var(--muted); } .dot.UP { background:#10b981; } .dot.DOWN { background:#ef4444; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:2px 12px; font-size:13px; } .kv dt { color:var(--muted); } .kv dd { margin:0; font-variant-numeric:tabular-nums; }
+  .table-wrap { overflow-x:auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Virtual POS</h1>
+  <p>A simulated card terminal and acquirer. Test card numbers only: NeoBank is a card-issuing simulation, not a full bank, and this is not a real card scheme.</p>
+</header>
+<main>
+  <section aria-labelledby="pay-h">
+    <h2 id="pay-h">Take a payment</h2>
+    <form id="pay-form" autocomplete="off">
+      <label for="pan">Card number</label>
+      <input id="pan" inputmode="numeric" placeholder="16 digits" required>
+      <div class="row">
+        <div><label for="expiry">Valid through (MM/YY)</label><input id="expiry" placeholder="10/29" required></div>
+        <div><label for="pin">PIN (optional)</label><input id="pin" inputmode="numeric" placeholder="4 digits" type="password"></div>
+      </div>
+      <div class="row">
+        <div><label for="amount">Amount (USD)</label><input id="amount" inputmode="decimal" placeholder="12.50" required></div>
+        <div><label for="shop">Shop</label><select id="shop"></select></div>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit" id="pay">Pay</button>
+        <button type="button" id="resend" title="Sends the latest payment again to show the duplicate rule">Send last again</button>
+        <button type="button" id="use-demo" title="Fills in the published demo card of NeoBank's demo data">Use the demo card</button>
+      </div>
+    </form>
+    <div id="result" aria-live="polite" style="margin-top:14px"></div>
+  </section>
+
+  <section aria-labelledby="net-h">
+    <h2 id="net-h">Network</h2>
+    <div id="net"><p class="muted">Loading…</p></div>
+    <h3 style="font-size:14px;margin:14px 0 4px">Make something go wrong</h3>
+    <p class="muted" style="margin:0 0 6px">These switches live in the network process and are off at start.</p>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="chaos-down" style="width:auto"> NeoBank is down (the network drops the line)</label>
+    <div class="row">
+      <div><label for="chaos-issuer">Hold NeoBank's answers back (ms)</label><input id="chaos-issuer" inputmode="numeric" value="0"></div>
+      <div><label for="chaos-network">Hold the network's answers back (ms)</label><input id="chaos-network" inputmode="numeric" value="0"></div>
+    </div>
+    <div class="actions"><button id="chaos-apply">Apply</button><button id="chaos-reset">Switch everything off</button></div>
+    <p id="chaos-msg" class="muted"></p>
+  </section>
+
+  <section class="wide" aria-labelledby="tx-h">
+    <h2 id="tx-h">Recent payments</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Time</th><th>Shop</th><th>Card</th><th style="text-align:right">Amount</th><th>Status</th><th>Detail</th><th></th></tr></thead>
+      <tbody id="tx"><tr><td colspan="7" class="muted">No payments yet.</td></tr></tbody>
+    </table></div>
+  </section>
+</main>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var config = null;
+
+  function api(method, path, body) {
+    return fetch(path, { method: method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.text().then(function (t) { var j = {}; try { j = JSON.parse(t); } catch (e) { /* not json */ } return { status: r.status, json: j }; }); });
+  }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  function showBanner(kind, text) {
+    var box = $('result'); clear(box);
+    box.appendChild(el('div', 'banner ' + kind, text));
+    return box;
+  }
+
+  function showResult(r) {
+    var box = showBanner(r.status === 'APPROVED' ? 'APPROVED' : r.status === 'REVERSING' ? 'REVERSING' : 'DECLINED', r.message);
+    var parts = [['Decoded request', r.requestText], ['Request bytes (card number and PIN hidden)', r.requestHex],
+                 ['Decoded response', r.responseText], ['Response bytes (card number hidden)', r.responseHex]];
+    var d = el('details'); d.open = true; d.appendChild(el('summary', null, 'The messages'));
+    parts.forEach(function (p) { if (p[1]) { d.appendChild(el('div', 'muted', p[0])); d.appendChild(el('pre', null, p[1])); } });
+    box.appendChild(d);
+  }
+
+  function loadTransactions() {
+    return api('GET', '/api/transactions').then(function (r) {
+      var body = $('tx'); clear(body);
+      var rows = (r.json.transactions || []);
+      if (!rows.length) { var tr = el('tr'); var td = el('td', 'muted', 'No payments yet.'); td.colSpan = 7; tr.appendChild(td); body.appendChild(tr); return; }
+      rows.forEach(function (t) {
+        var tr = el('tr');
+        tr.appendChild(el('td', 'mono', new Date(t.createdAt).toLocaleTimeString()));
+        tr.appendChild(el('td', null, t.merchant));
+        tr.appendChild(el('td', 'mono', t.card));
+        tr.appendChild(el('td', 'num', t.amount));
+        var s = el('td'); s.appendChild(el('span', 'chip ' + t.status, t.status.replace('_', ' ').toLowerCase())); tr.appendChild(s);
+        var detail = (t.responseCode ? 'code ' + t.responseCode + ' ' : '') + (t.authCode ? '(' + t.authCode + ') ' : '') + (t.reason || '');
+        tr.appendChild(el('td', 'muted', detail));
+        var a = el('td');
+        if (t.status === 'APPROVED') { var b = el('button', null, 'Void'); b.addEventListener('click', function () { voidSale(t.id, b); }); a.appendChild(b); }
+        tr.appendChild(a); body.appendChild(tr);
+      });
+    });
+  }
+
+  function loadNetwork() {
+    return api('GET', '/api/network').then(function (r) {
+      var box = $('net'); clear(box);
+      if (r.status !== 200) { box.appendChild(el('div', 'banner error', 'The network process is not reachable.')); return; }
+      var n = r.json, line = el('div', 'status-line');
+      line.appendChild(el('span', 'dot ' + n.issuerLink)); line.appendChild(el('strong', null, 'NeoBank link: ' + n.issuerLink));
+      box.appendChild(line);
+      var dl = el('dl', 'kv');
+      [['Requests in flight', n.inFlight], ['Stand-in approvals waiting to be told to NeoBank', n.advicesWaiting], ['Reversals waiting', n.reversalsWaiting],
+       ['Answered by NeoBank', n.counters.answeredByIssuer], ['Approved by the network itself (stand-in)', n.counters.standInApprovals],
+       ['Refused when NeoBank was out of reach', n.counters.standInRefusals], ['Late approvals undone', n.counters.lateApprovalsReversed]
+      ].forEach(function (kv) { dl.appendChild(el('dt', null, kv[0])); dl.appendChild(el('dd', null, String(kv[1]))); });
+      box.appendChild(dl);
+    });
+  }
+
+  function voidSale(id, button) {
+    button.disabled = true;
+    api('POST', '/api/void', { id: id }).then(function (r) {
+      if (r.status === 200) showResult(r.json); else showBanner('error', r.json.error || 'The void failed.');
+      loadTransactions();
+    });
+  }
+
+  $('pay-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var button = $('pay'); button.disabled = true;
+    showBanner('info', 'Waiting for the bank…');
+    api('POST', '/api/pay', { pan: $('pan').value, expiry: $('expiry').value, amount: $('amount').value, merchantId: $('shop').value, pin: $('pin').value })
+      .then(function (r) {
+        if (r.status === 200) showResult(r.json); else showBanner('error', r.json.error || 'The payment could not be sent.');
+        button.disabled = false; loadTransactions(); loadNetwork();
+      });
+  });
+
+  $('resend').addEventListener('click', function () {
+    showBanner('info', 'Sending the latest payment again…');
+    api('POST', '/api/resend').then(function (r) {
+      if (r.status === 200) showResult(r.json); else showBanner('error', r.json.error || 'Nothing to send again.');
+      loadTransactions();
+    });
+  });
+
+  $('use-demo').addEventListener('click', function () {
+    if (!config) return;
+    $('pan').value = config.demoCard.pan; $('expiry').value = config.demoCard.expiry; $('pin').value = config.demoCard.pin;
+  });
+
+  function applyChaos(body) {
+    $('chaos-msg').textContent = '';
+    api('POST', '/api/network/chaos', body).then(function (r) {
+      $('chaos-msg').textContent = r.status === 200 ? 'Done.' : (r.json.error || 'The network refused that.');
+      loadNetwork();
+    });
+  }
+  $('chaos-apply').addEventListener('click', function () {
+    applyChaos({ issuerDown: $('chaos-down').checked, issuerResponseDelayMs: Number($('chaos-issuer').value) || 0, acquirerResponseDelayMs: Number($('chaos-network').value) || 0 });
+  });
+  $('chaos-reset').addEventListener('click', function () {
+    $('chaos-down').checked = false; $('chaos-issuer').value = '0'; $('chaos-network').value = '0';
+    applyChaos({ issuerDown: false, issuerResponseDelayMs: 0, acquirerResponseDelayMs: 0 });
+  });
+
+  api('GET', '/api/config').then(function (r) {
+    config = r.json;
+    (config.merchants || []).forEach(function (m) {
+      var o = el('option', null, m.name + ' (MCC ' + m.mcc + ')'); o.value = m.id; $('shop').appendChild(o);
+    });
+    $('use-demo').click();
+    loadTransactions(); loadNetwork();
+    setInterval(function () { loadTransactions(); loadNetwork(); }, 3000);
+  });
+})();
+</script>
+</body>
+</html>

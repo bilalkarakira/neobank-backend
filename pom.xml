@@ -14,6 +14,7 @@
         <module>iso8583</module>
         <module>shared</module>
         <module>network</module>
+        <module>acquirer</module>
     </modules>
 
     <properties>

@@ -59,7 +59,8 @@ class SecretsTest {
             public void close() {
             }
         };
-        Logger root = Logger.getLogger("");
+        // only OUR loggers: the JDK and the libraries log things of their own (certificate dumps, for one) that contain long digit runs
+        Logger root = Logger.getLogger("com.bilal.cardnet");
         Level before = root.getLevel();
         root.setLevel(Level.ALL);
         root.addHandler(capture);
@@ -88,9 +89,9 @@ class SecretsTest {
             }
 
             String tables = h.scalar("""
-                    select coalesce((select string_agg(row_to_json(t)::text, ' ') from net_transactions t), '') || ' ' ||
-                           coalesce((select string_agg(row_to_json(t)::text, ' ') from net_standin_advices t), '') || ' ' ||
-                           coalesce((select string_agg(row_to_json(t)::text, ' ') from pending_reversals t), '')
+                    select coalesce((select string_agg((to_jsonb(t) - 'request_ciphertext')::text, ' ') from net_transactions t), '') || ' ' ||
+                           coalesce((select string_agg((to_jsonb(t) - 'request_ciphertext')::text, ' ') from net_standin_advices t), '') || ' ' ||
+                           coalesce((select string_agg((to_jsonb(t) - 'request_ciphertext')::text, ' ') from pending_reversals t), '')
                     """);
             String bytes = h.scalar("select coalesce(string_agg(encode(request_ciphertext, 'escape'), ' '), '') from "
                     + "(select request_ciphertext from net_standin_advices union all select request_ciphertext from pending_reversals) x");

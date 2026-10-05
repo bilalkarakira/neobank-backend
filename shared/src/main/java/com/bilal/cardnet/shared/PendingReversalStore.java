@@ -151,6 +151,19 @@ public final class PendingReversalStore {
         }
     }
 
+    /** The acquirer transaction a queued reversal belongs to, if it was queued for one. */
+    public Optional<UUID> acqTransactionOf(UUID reversalId) {
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(
+                "select acq_transaction_id from pending_reversals where id = ?")) {
+            ps.setObject(1, reversalId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.ofNullable(rs.getObject(1, UUID.class)) : Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("could not read a reversal", e);
+        }
+    }
+
     public int countPending(String owner) {
         try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(
                 "select count(*) from pending_reversals where owner = ? and status = 'PENDING'")) {
