@@ -90,6 +90,11 @@ public class TransactionHistoryRepository {
         } else if (f.direction() == Direction.OUT) {
             sql.append(" and e.amount < 0");
         }
+        if (f.recurring() != null) {
+            // same definition as the badge: a recurring run points at the transaction
+            sql.append(f.recurring() ? " and exists (select 1 from recurring_runs r where r.transaction_id = t.id)"
+                    : " and not exists (select 1 from recurring_runs r where r.transaction_id = t.id)");
+        }
         if (f.minAmount() != null) {
             sql.append(" and abs(e.amount) >= :minAmount");
             params.put("minAmount", f.minAmount());

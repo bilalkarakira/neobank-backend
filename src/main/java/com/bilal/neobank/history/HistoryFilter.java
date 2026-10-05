@@ -7,8 +7,11 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** A validated history query. Dates are UTC and inclusive; amounts filter on the absolute value. */
-public record HistoryFilter(LocalDate from, LocalDate to, TransactionType type, Direction direction,
+/**
+ * A validated history query. Dates are UTC and inclusive; amounts filter on the absolute value; {@code recurring} is
+ * true for only payments made by a standing order, false for only the others, null for both.
+ */
+public record HistoryFilter(LocalDate from, LocalDate to, TransactionType type, Direction direction, Boolean recurring,
         BigDecimal minAmount, BigDecimal maxAmount, String q, HistorySort sort, int page, int size) {
 
     public static final int DEFAULT_SIZE = 20;
@@ -19,7 +22,7 @@ public record HistoryFilter(LocalDate from, LocalDate to, TransactionType type, 
 
     /** Validates the raw request parameters; throws {@link InvalidFilterException} listing every problem. */
     public static HistoryFilter of(LocalDate from, LocalDate to, TransactionType type, Direction direction,
-            BigDecimal minAmount, BigDecimal maxAmount, String q, String sort, Integer page, Integer size) {
+            Boolean recurring, BigDecimal minAmount, BigDecimal maxAmount, String q, String sort, Integer page, Integer size) {
         Map<String, String> errors = new LinkedHashMap<>();
 
         if (from != null && to != null && from.isAfter(to)) {
@@ -59,6 +62,6 @@ public record HistoryFilter(LocalDate from, LocalDate to, TransactionType type, 
         if (!errors.isEmpty()) {
             throw new InvalidFilterException(errors);
         }
-        return new HistoryFilter(from, to, type, direction, minAmount, maxAmount, query, order, pageNumber, pageSize);
+        return new HistoryFilter(from, to, type, direction, recurring, minAmount, maxAmount, query, order, pageNumber, pageSize);
     }
 }

@@ -112,6 +112,96 @@ class HistoryRecurringMarkerTest extends HistoryTestBase {
         assertThat(receiver).doesNotContain(orderId).doesNotContain("paymentId").doesNotContain("frequency");
     }
 
+    // ---- the "recurring" filter ---------------------------------------------------------------------------------
+
+    /** Alice: a deposit, an ordinary transfer and one standing-order payment. Returns her token and account. */
+    private record Scenario(String token, Acc account, Acc other, String otherToken) {
+    }
+
+    private Scenario threeKindsOfRows() throws Exception {
+        String alice = tokenFor("alice@example.com", "Alice", "Kent");
+        Acc a = open(alice, "CHECKING", null);
+        String bob = tokenFor("bob@example.com", "Bob", "Miller");
+        Acc b = open(bob, "CHECKING", null);
+        deposit(alice, a, "500.00", "Top-up");
+        transfer(alice, a, b.iban(), "10.00", "Lunch");
+        standingOrder(alice, a, b, "25.00", "Gym");
+        executor.runAllDue();
+        return new Scenario(alice, a, b, bob);
+    }
+
+    private List<String> descriptions(Scenario s, String query) throws Exception {
+        String json = history(s.token(), s.account(), query).andReturn().getResponse().getContentAsString();
+        return JsonPath.read(json, "$.items[*].description");
+    }
+
+    @Test
+    void recurringTrueShowsOnlyPaymentsMadeByAStandingOrder() throws Exception {
+        Scenario s = threeKindsOfRows();
+
+        assertThat(descriptions(s, "?recurring=true")).containsExactly("Gym");
+        String json = history(s.token(), s.account(), "?recurring=true").andReturn().getResponse().getContentAsString();
+        assertThat((Integer) JsonPath.read(json, "$.totalElements")).isEqualTo(1); // the count follows the filter too
+    }
+
+    @Test
+    void recurringFalseShowsEverythingElse() throws Exception {
+        Scenario s = threeKindsOfRows();
+
+        assertThat(descriptions(s, "?recurring=false")).containsExactlyInAnyOrder("Lunch", "Top-up");
+    }
+
+    @Test
+    void leavingTheFilterOutShowsAllThreeAsBefore() throws Exception {
+        Scenario s = threeKindsOfRows();
+
+        assertThat(descriptions(s, "")).containsExactlyInAnyOrder("Gym", "Lunch", "Top-up");
+    }
+
+    @Test
+    void theFilterCombinesWithTheOtherFiltersAndWithPaging() throws Exception {
+        Scenario s = threeKindsOfRows();
+
+        assertThat(descriptions(s, "?recurring=false&type=TRANSFER")).containsExactly("Lunch");
+        assertThat(descriptions(s, "?recurring=false&direction=IN")).containsExactly("Top-up");
+        assertThat(descriptions(s, "?recurring=true&direction=IN")).isEmpty(); // Alice only SENT the recurring payment
+        assertThat(descriptions(s, "?recurring=false&q=lunch")).containsExactly("Lunch");
+        assertThat(descriptions(s, "?recurring=true&q=lunch")).isEmpty();      // a search never widens the filter
+
+        String paged = history(s.token(), s.account(), "?recurring=false&size=1&page=1").andReturn().getResponse().getContentAsString();
+        assertThat((Integer) JsonPath.read(paged, "$.totalElements")).isEqualTo(2);
+        assertThat((Integer) JsonPath.read(paged, "$.totalPages")).isEqualTo(2);
+        assertThat((List<?>) JsonPath.read(paged, "$.items")).hasSize(1);
+    }
+
+    @Test
+    void theReceiverCanFilterTheSameWayOnTheirSide() throws Exception {
+        Scenario s = threeKindsOfRows();
+        String json = history(s.otherToken(), s.other(), "?recurring=true").andReturn().getResponse().getContentAsString();
+
+        assertThat((List<?>) JsonPath.read(json, "$.items")).hasSize(1);
+    }
+
+    @Test
+    void anInvalidValueIsAValidationErrorNotAnIgnoredFilter() throws Exception {
+        Scenario s = threeKindsOfRows();
+
+        history(s.token(), s.account(), "?recurring=maybe").andExpect(status().isBadRequest());
+        history(s.token(), s.account(), "?recurring=2").andExpect(status().isBadRequest());
+        history(s.token(), s.account(), "?recurring=nope").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void theCsvExportFollowsTheSameFilter() throws Exception {
+        Scenario s = threeKindsOfRows();
+
+        String onlyRecurring = export(s.token(), s.account(), "?recurring=true").andReturn().getResponse().getContentAsString();
+        String notRecurring = export(s.token(), s.account(), "?recurring=false").andReturn().getResponse().getContentAsString();
+
+        assertThat(onlyRecurring).contains("Gym").doesNotContain("Lunch").doesNotContain("Top-up");
+        assertThat(notRecurring).contains("Lunch").contains("Top-up").doesNotContain("Gym");
+    }
+
     @Test
     void theCsvExportIsUnchangedBecauseNewColumnsCouldBreakWhoeverParsesIt() throws Exception {
         String alice = tokenFor("alice@example.com", "Alice", "Kent");

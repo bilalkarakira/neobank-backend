@@ -34,13 +34,14 @@ public class HistoryController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) TransactionType type,
             @RequestParam(required = false) Direction direction,
+            @RequestParam(required = false) Boolean recurring,
             @RequestParam(required = false) BigDecimal minAmount,
             @RequestParam(required = false) BigDecimal maxAmount,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size) {
-        HistoryFilter filter = HistoryFilter.of(from, to, type, direction, minAmount, maxAmount, q, sort, page, size);
+        HistoryFilter filter = HistoryFilter.of(from, to, type, direction, recurring, minAmount, maxAmount, q, sort, page, size);
         return historyService.page(UUID.fromString(jwt.getSubject()), accountId, filter);
     }
 
@@ -51,11 +52,12 @@ public class HistoryController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) TransactionType type,
             @RequestParam(required = false) Direction direction,
+            @RequestParam(required = false) Boolean recurring,
             @RequestParam(required = false) BigDecimal minAmount,
             @RequestParam(required = false) BigDecimal maxAmount,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String sort) {
-        HistoryFilter filter = HistoryFilter.of(from, to, type, direction, minAmount, maxAmount, q, sort, null, null);
+        HistoryFilter filter = HistoryFilter.of(from, to, type, direction, recurring, minAmount, maxAmount, q, sort, null, null);
         HistoryService.Export export = historyService.export(UUID.fromString(jwt.getSubject()), accountId, filter);
 
         ResponseEntity.BodyBuilder response = ResponseEntity.ok()
