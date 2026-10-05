@@ -20,6 +20,19 @@ public enum HistorySort {
         this.orderBy = orderBy;
     }
 
+    String parameter() {
+        return parameter;
+    }
+
+    /** The comparison that selects the rows AFTER a cursor in this order (row values compare value first, then id). */
+    String after() {
+        return this == DATE_DESC || this == AMOUNT_DESC ? "<" : ">";
+    }
+
+    String column() {
+        return this == DATE_DESC || this == DATE_ASC ? "e.created_at" : "e.amount";
+    }
+
     public String orderBy() {
         return orderBy;
     }

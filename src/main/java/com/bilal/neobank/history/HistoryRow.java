@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /** One ledger entry of the inspected account, joined with its transaction and the counterparty account. */
-public record HistoryRow(UUID transactionId, TransactionType type, BigDecimal amount, BigDecimal balanceAfter,
+public record HistoryRow(long entryId, UUID transactionId, TransactionType type, BigDecimal amount, BigDecimal balanceAfter,
         String description, Instant createdAt, AccountType counterpartyType, UUID counterpartyUserId,
         String counterpartyIban, String counterpartyNickname, String counterpartyFirstName,
         String counterpartyLastName, String categoryName,

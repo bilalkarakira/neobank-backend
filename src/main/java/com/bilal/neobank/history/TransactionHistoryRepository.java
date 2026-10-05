@@ -37,18 +37,18 @@ public class TransactionHistoryRepository {
 
     public List<HistoryRow> find(UUID accountId, HistoryFilter filter, int limit, long offset) {
         Map<String, Object> params = new HashMap<>();
-        String where = where(accountId, filter, params);
+        String where = where(accountId, filter, params, true);
         params.put("limit", limit);
         params.put("offset", offset);
         String sql = """
-                select t.id as transaction_id, t.type, e.amount, e.balance_after, t.description, e.created_at,
+                select e.id as entry_id, t.id as transaction_id, t.type, e.amount, e.balance_after, t.description, e.created_at,
                        cp.type as cp_type, cp.user_id as cp_user_id, cp.iban as cp_iban, cp.nickname as cp_nickname,
                        u.first_name as cp_first_name, u.last_name as cp_last_name, cat.name as category_name,
                        exists (select 1 from recurring_runs r where r.transaction_id = t.id) as recurring
                 """ + FROM + where + " order by " + filter.sort().orderBy() + " limit :limit offset :offset";
 
         return jdbc.sql(sql).params(params).query((rs, i) -> new HistoryRow(
-                rs.getObject("transaction_id", UUID.class),
+                rs.getLong("entry_id"), rs.getObject("transaction_id", UUID.class),
                 TransactionType.valueOf(rs.getString("type")),
                 rs.getBigDecimal("amount"),
                 rs.getBigDecimal("balance_after"),
@@ -65,11 +65,11 @@ public class TransactionHistoryRepository {
 
     public long count(UUID accountId, HistoryFilter filter) {
         Map<String, Object> params = new HashMap<>();
-        String where = where(accountId, filter, params);
+        String where = where(accountId, filter, params, false); // the total is of the whole filtered history
         return jdbc.sql("select count(*) " + FROM + where).params(params).query(Long.class).single();
     }
 
-    private static String where(UUID accountId, HistoryFilter f, Map<String, Object> params) {
+    private static String where(UUID accountId, HistoryFilter f, Map<String, Object> params, boolean forPage) {
         StringBuilder sql = new StringBuilder();
         params.put("accountId", accountId);
 
@@ -102,6 +102,13 @@ public class TransactionHistoryRepository {
         if (f.maxAmount() != null) {
             sql.append(" and abs(e.amount) <= :maxAmount");
             params.put("maxAmount", f.maxAmount());
+        }
+        if (f.cursor() != null && forPage) {
+            // keyset: the rows strictly after the cursor in the chosen order (the date orders use idx_ledger_entries_account_created)
+            sql.append(" and (").append(f.sort().column()).append(", e.id) ").append(f.sort().after())
+                    .append(" (:cursorValue, :cursorId)");
+            params.put("cursorValue", f.cursor().sortValue());
+            params.put("cursorId", f.cursor().entryId());
         }
         if (f.q() != null) {
             sql.append(" and t.description ilike :q escape '\\'");

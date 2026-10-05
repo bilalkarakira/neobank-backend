@@ -43,11 +43,15 @@ public class HistoryService {
     public HistoryPage page(UUID userId, UUID accountId, HistoryFilter filter) {
         accountService.get(userId, accountId); // 404 unless the caller owns the account
         long total = repository.count(accountId, filter);
-        List<TransactionItem> items = repository
-                .find(accountId, filter, filter.size(), (long) filter.page() * filter.size()).stream()
-                .map(row -> toItem(row, userId)).toList();
+        // one row more than the page, only to learn whether there is a next one
+        List<HistoryRow> rows = repository.find(accountId, filter, filter.size() + 1,
+                filter.cursor() != null ? 0 : (long) filter.page() * filter.size());
+        boolean more = rows.size() > filter.size();
+        List<HistoryRow> shown = more ? rows.subList(0, filter.size()) : rows;
+        String nextCursor = more ? HistoryCursor.after(filter.sort(), shown.get(shown.size() - 1)).encode() : null;
+        List<TransactionItem> items = shown.stream().map(row -> toItem(row, userId)).toList();
         int totalPages = (int) ((total + filter.size() - 1) / filter.size());
-        return new HistoryPage(items, filter.page(), filter.size(), total, totalPages);
+        return new HistoryPage(items, filter.page(), filter.size(), total, totalPages, nextCursor);
     }
 
     /** Capped at app.history.export-max-rows; the whole file is built in memory, which that cap keeps small. */

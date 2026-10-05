@@ -40,8 +40,9 @@ public class HistoryController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size) {
-        HistoryFilter filter = HistoryFilter.of(from, to, type, direction, recurring, minAmount, maxAmount, q, sort, page, size);
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String cursor) {
+        HistoryFilter filter = HistoryFilter.of(from, to, type, direction, recurring, minAmount, maxAmount, q, sort, page, size, cursor);
         return historyService.page(UUID.fromString(jwt.getSubject()), accountId, filter);
     }
 
@@ -57,7 +58,7 @@ public class HistoryController {
             @RequestParam(required = false) BigDecimal maxAmount,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String sort) {
-        HistoryFilter filter = HistoryFilter.of(from, to, type, direction, recurring, minAmount, maxAmount, q, sort, null, null);
+        HistoryFilter filter = HistoryFilter.of(from, to, type, direction, recurring, minAmount, maxAmount, q, sort, null, null, null);
         HistoryService.Export export = historyService.export(UUID.fromString(jwt.getSubject()), accountId, filter);
 
         ResponseEntity.BodyBuilder response = ResponseEntity.ok()

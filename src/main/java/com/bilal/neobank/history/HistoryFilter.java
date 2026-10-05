@@ -9,10 +9,12 @@ import java.util.Map;
 
 /**
  * A validated history query. Dates are UTC and inclusive; amounts filter on the absolute value; {@code recurring} is
- * true for only payments made by a standing order, false for only the others, null for both.
+ * true for only payments made by a standing order, false for only the others, null for both. A {@code cursor}
+ * continues after a row of the same sort order instead of counting {@code page} rows from the start.
  */
 public record HistoryFilter(LocalDate from, LocalDate to, TransactionType type, Direction direction, Boolean recurring,
-        BigDecimal minAmount, BigDecimal maxAmount, String q, HistorySort sort, int page, int size) {
+        BigDecimal minAmount, BigDecimal maxAmount, String q, HistorySort sort, int page, int size,
+        HistoryCursor cursor) {
 
     public static final int DEFAULT_SIZE = 20;
     public static final int MAX_SIZE = 100;
@@ -22,7 +24,7 @@ public record HistoryFilter(LocalDate from, LocalDate to, TransactionType type, 
 
     /** Validates the raw request parameters; throws {@link InvalidFilterException} listing every problem. */
     public static HistoryFilter of(LocalDate from, LocalDate to, TransactionType type, Direction direction,
-            Boolean recurring, BigDecimal minAmount, BigDecimal maxAmount, String q, String sort, Integer page, Integer size) {
+            Boolean recurring, BigDecimal minAmount, BigDecimal maxAmount, String q, String sort, Integer page, Integer size, String cursor) {
         Map<String, String> errors = new LinkedHashMap<>();
 
         if (from != null && to != null && from.isAfter(to)) {
@@ -59,9 +61,21 @@ public record HistoryFilter(LocalDate from, LocalDate to, TransactionType type, 
             errors.put("size", "must be between 1 and " + MAX_SIZE);
         }
 
+        HistoryCursor position = null;
+        if (cursor != null && !cursor.isBlank()) {
+            position = HistoryCursor.decode(cursor.trim()).orElse(null);
+            if (position == null) {
+                errors.put("cursor", "is not a valid cursor");
+            } else if (position.sort() != order) {
+                errors.put("cursor", "belongs to a different sort order");
+            } else if (pageNumber > 0) {
+                errors.put("cursor", "cannot be combined with page");
+            }
+        }
+
         if (!errors.isEmpty()) {
             throw new InvalidFilterException(errors);
         }
-        return new HistoryFilter(from, to, type, direction, recurring, minAmount, maxAmount, query, order, pageNumber, pageSize);
+        return new HistoryFilter(from, to, type, direction, recurring, minAmount, maxAmount, query, order, pageNumber, pageSize, position);
     }
 }
