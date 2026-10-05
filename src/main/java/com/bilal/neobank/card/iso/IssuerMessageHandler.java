@@ -2,6 +2,7 @@ package com.bilal.neobank.card.iso;
 
 import com.bilal.cardnet.iso8583.Message;
 import com.bilal.neobank.card.auth.Authorization;
+import com.bilal.neobank.card.auth.AuthorizationEngine.AdviceInput;
 import com.bilal.neobank.card.auth.AuthorizationEngine.AuthInput;
 import com.bilal.neobank.card.auth.AuthorizationEngine.Decision;
 import com.bilal.neobank.card.auth.AuthorizationEngine.ReversalInput;
@@ -45,6 +46,7 @@ public class IssuerMessageHandler {
     public Optional<Message> handle(Message request, Connection connection) {
         return switch (request.mti()) {
             case "0100", "0200" -> Optional.of(authorization(request, connection));
+            case "0120" -> Optional.of(advice(request, connection));
             case "0400" -> Optional.of(reversal(request, connection));
             case "0800" -> Optional.of(networkManagement(request, connection));
             default -> Optional.empty();
@@ -64,6 +66,21 @@ public class IssuerMessageHandler {
                 amount(request.get(4)), request.get(49));
         AuthInput input = new AuthInput(request.get(2), request.get(14), request.get(52), fields);
         return respond(request, issuer.authorize(input));
+    }
+
+    /** 0120: the card network tells us it approved a payment by itself (stand-in). Needs the elements of a payment plus DE 38. */
+    private Message advice(Message request, Connection connection) {
+        if (!connection.signedOn()) {
+            return respond(request, new Decision(ResponseCode.ISSUER_UNAVAILABLE, null));
+        }
+        if (!hasAll(request, AUTH_REQUIRED) || !request.has(38)) {
+            return respond(request, new Decision(ResponseCode.FORMAT_ERROR, null));
+        }
+        Authorization.Request fields = new Authorization.Request(request.mti(), request.get(11),
+                request.get(37), request.get(41).strip(), request.get(42).strip(), optional(request, 43), request.get(18),
+                padAcquirer(request.get(32)), request.get(3), optional(request, 22), request.get(13), request.get(7),
+                amount(request.get(4)), request.get(49));
+        return respond(request, issuer.advise(new AdviceInput(request.get(2), request.get(38), fields)));
     }
 
     private Message reversal(Message request, Connection connection) {

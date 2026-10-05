@@ -100,6 +100,22 @@ class AdminAuthorizationsTest extends IssuerTestBase {
     }
 
     @Test
+    void aPaymentApprovedByTheNetworkWhileNeoBankWasUnavailableIsMarked() throws Exception {
+        Fixture f = fixture("authz5@example.com", "100.00");
+        String admin = adminToken();
+        Instant now = Instant.now();
+        var request = new Authorization.Request("0120", "000777", "000000000777", "TERM0001", "MERCHANT0000001", "Corner Cafe", "5814",
+                "00000000001", "000000", "051", "0101", "0101120000", new BigDecimal("12.00"), "840");
+        authorizations.saveAndFlush(Authorization.advised(f.cardId(), UUID.fromString(f.account().id()), "h" + "3".repeat(63),
+                f.pan().substring(12), request, "SI4F2K", now, now.plus(Duration.ofDays(7))));
+        insert(f, "000001", "10.00", "00", true, now.minusSeconds(5), now.plus(Duration.ofDays(7)));
+
+        mockMvc.perform(get("/api/admin/authorizations").header("Authorization", admin))
+                .andExpect(jsonPath("$.items[?(@.mti=='0120')].standIn").value(org.hamcrest.Matchers.contains(true)))
+                .andExpect(jsonPath("$.items[?(@.mti=='0100')].standIn").value(org.hamcrest.Matchers.contains(false)));
+    }
+
+    @Test
     void theSizeIsCappedAndBadInputIsRefused() throws Exception {
         Fixture f = fixture("authz3@example.com", "100.00");
         String admin = adminToken();

@@ -102,6 +102,10 @@ public class Authorization {
     @Column(name = "released_at")
     private Instant releasedAt;
 
+    /** Approved by the card network while this bank was unavailable, and reported afterwards in an advice. */
+    @Column(name = "via_stand_in", nullable = false)
+    private boolean viaStandIn;
+
     protected Authorization() {
         // required by JPA
     }
@@ -147,6 +151,18 @@ public class Authorization {
                 AuthorizationStatus.DECLINED, now, null);
     }
 
+    /**
+     * A payment the network approved by itself (an advice, 0120). It is a statement of fact, so it holds the money whatever
+     * the balance is: the bank stands behind the network's answer.
+     */
+    public static Authorization advised(UUID cardId, UUID accountId, String panHash, String last4, Request request,
+            String authCode, Instant now, Instant expiresAt) {
+        Authorization a = new Authorization(cardId, accountId, panHash, last4, request, ResponseCode.APPROVED, authCode,
+                AuthorizationStatus.AUTHORIZED, now, expiresAt);
+        a.viaStandIn = true;
+        return a;
+    }
+
     /** What is left of a reversal that arrived before its original (see the P2 spec): the original will be refused. */
     public static Authorization tombstone(UUID cardId, UUID accountId, String panHash, String last4, Request request,
             Instant now) {
@@ -154,6 +170,15 @@ public class Authorization {
                 null, AuthorizationStatus.REVERSED, now, null);
         a.releasedAt = a.createdAt;
         return a;
+    }
+
+    /** The network approved what this bank had declined: the shop was told yes, so the bank carries it. */
+    public void replaceDeclineWithAdvice(String authCode, Instant expiresAt) {
+        this.status = AuthorizationStatus.AUTHORIZED;
+        this.responseCode = ResponseCode.APPROVED;
+        this.authCode = authCode;
+        this.expiresAt = expiresAt.truncatedTo(ChronoUnit.MICROS);
+        this.viaStandIn = true;
     }
 
     public void reverse(Instant now) {
@@ -191,4 +216,5 @@ public class Authorization {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getExpiresAt() { return expiresAt; }
     public Instant getReleasedAt() { return releasedAt; }
+    public boolean isViaStandIn() { return viaStandIn; }
 }

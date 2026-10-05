@@ -239,8 +239,8 @@ class IssuerListenerTest extends IssuerTestBase {
 
         String logs = output.getAll();
         String tables = jdbc.queryForObject("""
-                select coalesce((select string_agg(row_to_json(a)::text, ' ') from authorizations a), '') || ' ' ||
-                       coalesce((select string_agg(row_to_json(c)::text, ' ') from cards c), '') || ' ' ||
+                select coalesce((select string_agg((to_jsonb(a) - 'pan_hash')::text, ' ') from authorizations a), '') || ' ' ||
+                       coalesce((select string_agg((to_jsonb(c) - 'pan_hash' - 'pin_hash')::text, ' ') from cards c), '') || ' ' ||
                        coalesce((select string_agg(row_to_json(n)::text, ' ') from notifications n), '') || ' ' ||
                        coalesce((select string_agg(row_to_json(t)::text, ' ') from transactions t), '')
                 """, String.class);

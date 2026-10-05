@@ -1,5 +1,6 @@
 package com.bilal.neobank.card.auth;
 
+import com.bilal.neobank.card.auth.AuthorizationEngine.AdviceInput;
 import com.bilal.neobank.card.auth.AuthorizationEngine.AuthInput;
 import com.bilal.neobank.card.auth.AuthorizationEngine.Decision;
 import com.bilal.neobank.card.auth.AuthorizationEngine.ReversalInput;
@@ -29,6 +30,10 @@ public class IssuerService {
 
     public Decision authorize(AuthInput input) {
         return guarded(() -> engine.authorize(input));
+    }
+
+    public Decision advise(AdviceInput input) {
+        return guarded(() -> engine.advise(input));
     }
 
     public Decision reverse(ReversalInput input) {

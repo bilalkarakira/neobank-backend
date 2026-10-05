@@ -26,4 +26,17 @@ class IssuerSwitchedOffTest extends IssuerTestBase {
         assertThat(rows("true")).isZero();
         assertThat(available(f)).isEqualByComparingTo("100.00");
     }
+
+    @Test
+    void anAdviceIsStillAcceptedBecauseItStatesWhatAlreadyHappened() throws Exception {
+        Fixture f = fixture("off2@example.com", "100.00");
+        var advice = purchase(f, "25.00").copyWithMti("0120").set(38, "SI4F2K").set(39, "00");
+        try (Terminal terminal = new Terminal().signedOn()) {
+            var response = terminal.exchange(advice);
+            assertThat(response.mti()).isEqualTo("0130");
+            assertThat(code(response)).isEqualTo("00");
+        }
+        assertThat(rows("status = 'AUTHORIZED' and via_stand_in")).isEqualTo(1);
+        assertThat(available(f)).isEqualByComparingTo("75.00");
+    }
 }

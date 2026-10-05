@@ -12,13 +12,13 @@ import java.util.UUID;
  * flips the row, because that is when it stopped reserving money.
  */
 public record AuthorizationItem(UUID id, String merchantName, String amount, AuthorizationStatus status,
-        String responseCode, String reason, Instant createdAt, Instant expiresAt) {
+        String responseCode, String reason, boolean standIn, Instant createdAt, Instant expiresAt) {
 
     public static AuthorizationItem from(Authorization a, Instant now) {
         AuthorizationStatus status = a.getStatus() == AuthorizationStatus.AUTHORIZED && !a.holdsMoney(now)
                 ? AuthorizationStatus.EXPIRED : a.getStatus();
         return new AuthorizationItem(a.getId(), a.getMerchantName(), CardResponse.money(a.getAmount()), status,
-                a.getResponseCode(), ResponseCode.reason(a.getResponseCode()), a.getCreatedAt(),
+                a.getResponseCode(), ResponseCode.reason(a.getResponseCode()), a.isViaStandIn(), a.getCreatedAt(),
                 a.getStatus() == AuthorizationStatus.AUTHORIZED ? a.getExpiresAt() : null);
     }
 }

@@ -39,6 +39,10 @@ public class AuthorizationEngine {
     public record AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request) {
     }
 
+    /** A 0120 advice: the network already approved this payment with {@code authCode}. */
+    public record AdviceInput(String pan, String authCode, Authorization.Request request) {
+    }
+
     /** A reversal: the original is identified by DE 90 (STAN, transmission time, acquirer) and the card. */
     public record ReversalInput(String pan, BigDecimal amount, String originalStan, String originalTransmittedAt,
             Authorization.Request request) {
@@ -168,6 +172,47 @@ public class AuthorizationEngine {
             return decline(card, account, panHash, last4, r, ResponseCode.INSUFFICIENT_FUNDS, now);
         }
         return new Decision(ResponseCode.APPROVED, authCode);
+    }
+
+    /**
+     * Records a payment the card network approved on its own while this bank was unavailable. Always answers 00: an advice
+     * states what already happened, and the rules do not run again. It holds the money whatever the balance is (the bank
+     * stands behind the network's answer; the books check reports an account whose holds exceed its balance). Repeats are
+     * harmless: a request already known changes nothing, except that an earlier DECLINE of the very same request is replaced
+     * by the approval the shop was given. An unknown card or an account that is not active gets no hold, only a DECLINED
+     * row for the audit.
+     */
+    @Transactional
+    public Decision advise(AdviceInput in) {
+        entityManager.createNativeQuery("set local lock_timeout = '2s'").executeUpdate();
+        Instant now = clock.instant();
+        Authorization.Request r = in.request();
+        String panHash = crypto.hashPan(in.pan());
+        String last4 = last4(in.pan());
+
+        Optional<Card> found = cardRepository.findByPanHash(panHash);
+        Card card = found.orElse(null);
+        Account account = card == null ? null : holdService.lockAccount(card.getAccountId());
+
+        Optional<Authorization> existing = authorizationRepository.findDuplicate(panHash, r.acquirerId(), r.stan(), r.rrn(),
+                r.terminalId(), r.localDate());
+        if (existing.isPresent()) {
+            Authorization known = existing.get();
+            if (known.getStatus() == AuthorizationStatus.DECLINED && card != null && account.getStatus() == AccountStatus.ACTIVE) {
+                known.replaceDeclineWithAdvice(in.authCode(), now.plus(properties.holdTtl()));
+                authorizationRepository.save(known);
+            }
+            return new Decision(ResponseCode.APPROVED, null);
+        }
+        if (card == null) {
+            decline(null, null, panHash, last4, r, ResponseCode.INVALID_CARD, now);
+        } else if (account.getStatus() != AccountStatus.ACTIVE) {
+            decline(card, account, panHash, last4, r, ResponseCode.DO_NOT_HONOUR, now);
+        } else {
+            authorizationRepository.saveAndFlush(Authorization.advised(card.getId(), account.getId(), panHash, last4, r,
+                    in.authCode(), now, now.plus(properties.holdTtl())));
+        }
+        return new Decision(ResponseCode.APPROVED, null);
     }
 
     /**

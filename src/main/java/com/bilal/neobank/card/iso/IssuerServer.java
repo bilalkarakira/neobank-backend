@@ -122,11 +122,19 @@ public class IssuerServer implements SmartLifecycle {
             var in = new BufferedInputStream(socket.getInputStream());
             var out = new BufferedOutputStream(socket.getOutputStream());
             while (true) {
-                byte[] frame = Frame.read(in);
-                if (frame == null) {
-                    return; // the peer closed between frames: normal
+                Message request;
+                try {
+                    byte[] frame = Frame.read(in);
+                    if (frame == null) {
+                        return; // the peer closed between frames: normal
+                    }
+                    request = packager.unpack(frame);
+                } catch (Iso8583Exception e) {
+                    // counted BEFORE the socket closes, so anyone who sees the close also sees the count
+                    closedForBadInput.incrementAndGet();
+                    log.warn("Closed an issuer connection after bad input ({})", e.getClass().getSimpleName());
+                    return;
                 }
-                Message request = packager.unpack(frame);
                 Optional<Message> response = handler.handle(request, connection);
                 if (response.isEmpty()) {
                     closedForBadInput.incrementAndGet();
@@ -134,9 +142,6 @@ public class IssuerServer implements SmartLifecycle {
                 }
                 Frame.write(out, packager.pack(response.get()));
             }
-        } catch (Iso8583Exception e) {
-            closedForBadInput.incrementAndGet();
-            log.warn("Closed an issuer connection after bad input ({})", e.getClass().getSimpleName());
         } catch (SocketTimeoutException e) {
             log.debug("Closed an idle issuer connection");
         } catch (IOException e) {

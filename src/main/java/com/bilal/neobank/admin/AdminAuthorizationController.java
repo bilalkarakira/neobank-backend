@@ -27,7 +27,7 @@ public class AdminAuthorizationController {
 
     public record Item(UUID id, Instant createdAt, String last4, boolean cardKnown, String customerEmail,
             String merchantName, String amount, AuthorizationStatus status, String responseCode, String reason,
-            String mti, Instant expiresAt) {
+            String mti, boolean standIn, Instant expiresAt) {
     }
 
     public record Page(List<Item> items, long total, int page, int size) {
@@ -59,7 +59,7 @@ public class AdminAuthorizationController {
                 .query(Long.class).single();
         List<Item> items = jdbc.sql("""
                 select a.id, a.created_at, a.last4, a.card_id is not null as card_known, u.email, a.merchant_name,
-                       a.amount, a.status, a.response_code, a.mti, a.expires_at
+                       a.amount, a.status, a.response_code, a.mti, a.via_stand_in, a.expires_at
                 from authorizations a
                 left join cards c on c.id = a.card_id
                 left join users u on u.id = c.user_id
@@ -77,7 +77,7 @@ public class AdminAuthorizationController {
                             rs.getObject("created_at", OffsetDateTime.class).toInstant(), rs.getString("last4"),
                             rs.getBoolean("card_known"), rs.getString("email"), rs.getString("merchant_name"),
                             rs.getBigDecimal("amount").setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString(),
-                            shown, code, ResponseCode.reason(code), rs.getString("mti"),
+                            shown, code, ResponseCode.reason(code), rs.getString("mti"), rs.getBoolean("via_stand_in"),
                             shown == AuthorizationStatus.AUTHORIZED && expires != null ? expires.toInstant() : null);
                 }).list();
         return new Page(items, total, safePage, safeSize);
