@@ -59,6 +59,19 @@ public class AdminController {
         service.freeze(UUID.fromString(jwt.getSubject()), id, request.reason());
     }
 
+    /** Final: an account can only be closed when it is empty. */
+    @PostMapping("/api/admin/accounts/{id}/close")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void close(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, @Valid @RequestBody ReasonRequest request) {
+        service.closeAccount(UUID.fromString(jwt.getSubject()), id, request.reason());
+    }
+
+    /** Opening a customer is recorded in the audit log. */
+    @GetMapping("/api/admin/customers/{userId}")
+    public AdminDtos.CustomerDetail customer(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID userId) {
+        return service.customer(UUID.fromString(jwt.getSubject()), userId);
+    }
+
     @PostMapping("/api/admin/accounts/{id}/unfreeze")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void unfreeze(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,

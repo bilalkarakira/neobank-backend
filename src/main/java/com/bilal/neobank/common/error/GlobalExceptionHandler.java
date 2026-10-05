@@ -168,6 +168,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, "Session not found", ex.getMessage(), "SESSION_NOT_FOUND");
     }
 
+    @ExceptionHandler(AdminExceptions.CustomerNotFoundException.class)
+    ProblemDetail handleCustomerNotFound(AdminExceptions.CustomerNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Customer not found", ex.getMessage(), "CUSTOMER_NOT_FOUND");
+    }
+
+    @ExceptionHandler(AdminExceptions.AccountNotEmptyException.class)
+    ProblemDetail handleAccountNotEmpty(AdminExceptions.AccountNotEmptyException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Account not empty", ex.getMessage(), "ADMIN_ACCOUNT_NOT_EMPTY");
+    }
+
     @ExceptionHandler(AdminExceptions.NotLockedException.class)
     ProblemDetail handleNotLocked(AdminExceptions.NotLockedException ex) {
         return problem(HttpStatus.NOT_FOUND, "Not locked", ex.getMessage(), "NOT_LOCKED");

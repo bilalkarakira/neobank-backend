@@ -75,7 +75,7 @@ public class AdminRepository {
     public List<AccountRow> searchAccounts(String query, AccountStatus status, int limit, int offset) {
         Filter filter = filter(query, status);
         return jdbc.sql("""
-                select a.id, a.iban, a.type, a.status, a.balance, a.created_at, u.email, u.first_name, u.last_name
+                select a.id, a.iban, a.type, a.status, a.balance, a.created_at, a.user_id, u.email, u.first_name, u.last_name
                 from accounts a join users u on u.id = a.user_id
                 """ + filter.where + " order by a.created_at desc, a.id limit :limit offset :offset")
                 .params(filter.params).param("limit", limit).param("offset", offset)
@@ -83,7 +83,7 @@ public class AdminRepository {
                         AccountType.valueOf(rs.getString("type")), AccountStatus.valueOf(rs.getString("status")),
                         rs.getBigDecimal("balance").setScale(2, RoundingMode.HALF_UP).toPlainString(),
                         rs.getString("email"), rs.getString("first_name") + " " + rs.getString("last_name"),
-                        rs.getObject("created_at", OffsetDateTime.class).toInstant()))
+                        rs.getObject("created_at", OffsetDateTime.class).toInstant(), rs.getObject("user_id", UUID.class)))
                 .list();
     }
 
@@ -140,6 +140,63 @@ public class AdminRepository {
 
     public Optional<String> userEmail(UUID userId) {
         return jdbc.sql("select email from users where id = :id").param("id", userId).query(String.class).optional();
+    }
+
+    /** A customer (role CUSTOMER) by id: administrators are deliberately not returned. */
+    public Optional<AdminDtos.CustomerProfile> findCustomer(UUID userId) {
+        return jdbc.sql("select id, first_name, last_name, email, created_at from users where id = :id and role = 'CUSTOMER'")
+                .param("id", userId)
+                .query((rs, i) -> new AdminDtos.CustomerProfile(rs.getObject("id", UUID.class), rs.getString("first_name"),
+                        rs.getString("last_name"), rs.getString("email"),
+                        rs.getObject("created_at", OffsetDateTime.class).toInstant()))
+                .optional();
+    }
+
+    public List<AdminDtos.CustomerAccount> customerAccounts(UUID userId) {
+        return jdbc.sql("""
+                select id, iban, type, status, nickname, balance, created_at from accounts
+                where user_id = :user order by created_at, id
+                """).param("user", userId)
+                .query((rs, i) -> new AdminDtos.CustomerAccount(rs.getObject("id", UUID.class), rs.getString("iban"),
+                        AccountType.valueOf(rs.getString("type")), AccountStatus.valueOf(rs.getString("status")),
+                        rs.getString("nickname"), rs.getBigDecimal("balance").setScale(2, RoundingMode.HALF_UP).toPlainString(),
+                        rs.getObject("created_at", OffsetDateTime.class).toInstant()))
+                .list();
+    }
+
+    /** The newest ledger entries across all of the customer's accounts. */
+    public List<AdminDtos.CustomerActivity> recentActivity(UUID userId, int limit) {
+        return jdbc.sql("""
+                select e.created_at, a.iban, t.type, e.amount, e.balance_after, t.description
+                from ledger_entries e
+                join accounts a on a.id = e.account_id
+                join transactions t on t.id = e.transaction_id
+                where a.user_id = :user order by e.created_at desc, e.id desc limit :limit
+                """).param("user", userId).param("limit", limit)
+                .query((rs, i) -> new AdminDtos.CustomerActivity(rs.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        rs.getString("iban"), com.bilal.neobank.ledger.TransactionType.valueOf(rs.getString("type")),
+                        rs.getBigDecimal("amount").setScale(2, RoundingMode.HALF_UP).toPlainString(),
+                        rs.getBigDecimal("balance_after").setScale(2, RoundingMode.HALF_UP).toPlainString(),
+                        rs.getString("description")))
+                .list();
+    }
+
+    public Optional<OffsetDateTime> loginLockedUntil(String emailHash, OffsetDateTime now) {
+        return jdbc.sql("select locked_until from login_failures where email_hash = :hash and locked_until > :now")
+                .param("hash", emailHash).param("now", now).query(OffsetDateTime.class).optional();
+    }
+
+    public long ordersOfUser(UUID userId, String status) {
+        return jdbc.sql("select count(*) from recurring_payments where user_id = :user and status = :status")
+                .param("user", userId).param("status", status).query(Long.class).single();
+    }
+
+    /** Closing an account ends the standing orders that pay out of it: they could never succeed again. */
+    public int cancelOrdersOfAccount(UUID accountId) {
+        return jdbc.sql("""
+                update recurring_payments set status = 'CANCELLED', next_run_date = null
+                where source_account_id = :account and status in ('ACTIVE', 'PAUSED')
+                """).param("account", accountId).update();
     }
 
     public void insertAction(UUID adminId, String action, UUID accountId, String reason, String detail,

@@ -9,6 +9,7 @@ import com.bilal.neobank.admin.AdminDtos.AccountCounts;
 import com.bilal.neobank.admin.AdminDtos.AccountPage;
 import com.bilal.neobank.admin.AdminDtos.AccountRow;
 import com.bilal.neobank.admin.AdminDtos.AuditEntry;
+import com.bilal.neobank.admin.AdminDtos.CustomerDetail;
 import com.bilal.neobank.admin.AdminDtos.Overview;
 import com.bilal.neobank.admin.AdminDtos.ProbingBlock;
 import com.bilal.neobank.admin.AdminDtos.Reconciliation;
@@ -17,6 +18,7 @@ import com.bilal.neobank.admin.AdminDtos.SecurityCounts;
 import com.bilal.neobank.admin.AdminDtos.SecuritySnapshot;
 import com.bilal.neobank.admin.AdminDtos.Volume;
 import com.bilal.neobank.auth.AuthService;
+import com.bilal.neobank.auth.RefreshTokenService;
 import com.bilal.neobank.interest.InterestService;
 import com.bilal.neobank.ledger.Fingerprint;
 import com.bilal.neobank.ledger.LedgerReconciliationService;
@@ -52,10 +54,13 @@ public class AdminService {
     private final Clock clock;
     private final RateLimitProperties rateLimits;
     private final RateLimiter rateLimiter;
+    private final RefreshTokenService refreshTokens;
 
     public AdminService(AdminRepository repository, AccountRepository accountRepository,
             LedgerReconciliationService reconciliationService, InterestService interestService,
-            RecurringExecutor recurringExecutor, Clock clock, RateLimitProperties rateLimits, RateLimiter rateLimiter) {
+            RecurringExecutor recurringExecutor, Clock clock, RateLimitProperties rateLimits, RateLimiter rateLimiter,
+            RefreshTokenService refreshTokens) {
+        this.refreshTokens = refreshTokens;
         this.rateLimits = rateLimits;
         this.rateLimiter = rateLimiter;
         this.repository = repository;
@@ -120,6 +125,45 @@ public class AdminService {
         account.changeStatus(to);
         accountRepository.save(account);
         repository.insertAction(adminId, action, accountId, reason.trim(), null, now());
+    }
+
+    /**
+     * Closes an account for good. Only an empty account can be closed (money is never made to disappear), and closing is
+     * final: there is no reopening. The standing orders that pay out of it are cancelled in the same transaction, since
+     * they could never succeed again, and the audit entry says how many. Closing frees the customer's account-limit slot.
+     */
+    @Transactional
+    public void closeAccount(UUID adminId, UUID accountId, String reason) {
+        // the row lock serialises with any money movement: nothing can arrive between the balance check and the close
+        Account account = accountRepository.lockAllOrderedById(List.of(accountId)).stream().findFirst()
+                .filter(a -> a.getType() != AccountType.SYSTEM)
+                .orElseThrow(AccountNotFoundException::new);
+        if (account.getStatus() == AccountStatus.CLOSED) {
+            throw new AdminExceptions.InvalidStateException("The account is already closed.");
+        }
+        if (account.getBalance().signum() != 0) {
+            throw new AdminExceptions.AccountNotEmptyException(money(account.getBalance()));
+        }
+        account.changeStatus(AccountStatus.CLOSED);
+        accountRepository.save(account);
+        int cancelled = repository.cancelOrdersOfAccount(accountId);
+        repository.insertAction(adminId, "CLOSE_ACCOUNT", accountId, reason.trim(),
+                "cancelledOrders=" + cancelled, now());
+    }
+
+    /**
+     * One customer on one screen. Looking at personal data is itself recorded (VIEW_CUSTOMER), so this is a transaction
+     * that writes even though it reads.
+     */
+    @Transactional
+    public CustomerDetail customer(UUID adminId, UUID userId) {
+        var profile = repository.findCustomer(userId).orElseThrow(AdminExceptions.CustomerNotFoundException::new);
+        OffsetDateTime now = now();
+        repository.insertAction(adminId, "VIEW_CUSTOMER", null, null, "email=" + profile.email(), now);
+        return new CustomerDetail(profile, repository.customerAccounts(userId), repository.recentActivity(userId, 20),
+                refreshTokens.activeSessions(userId).size(),
+                repository.loginLockedUntil(Fingerprint.sha256(profile.email()), now).map(OffsetDateTime::toInstant).orElse(null),
+                repository.ordersOfUser(userId, "ACTIVE"), repository.ordersOfUser(userId, "PAUSED"));
     }
 
     /** Runs the monthly interest job now. Safe to repeat: months already accrued are skipped. */

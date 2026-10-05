@@ -6,6 +6,20 @@ public final class AdminExceptions {
     private AdminExceptions() {
     }
 
+    /** Unknown id, or not a customer (administrators are not browsable here). */
+    public static class CustomerNotFoundException extends RuntimeException {
+        public CustomerNotFoundException() {
+            super("Customer not found");
+        }
+    }
+
+    /** An account can only be closed when it holds nothing: the money must be moved out first. */
+    public static class AccountNotEmptyException extends RuntimeException {
+        public AccountNotEmptyException(String balance) {
+            super("The account still holds %s. It can only be closed when the balance is exactly 0.00.".formatted(balance));
+        }
+    }
+
     /** There is no active login lock for that email (never locked, already expired, or already unlocked). */
     public static class NotLockedException extends RuntimeException {
         public NotLockedException() {

@@ -2,6 +2,7 @@ package com.bilal.neobank.admin;
 
 import com.bilal.neobank.account.AccountStatus;
 import com.bilal.neobank.account.AccountType;
+import com.bilal.neobank.ledger.TransactionType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -58,7 +59,29 @@ public final class AdminDtos {
     }
 
     public record AccountRow(UUID id, String iban, AccountType type, AccountStatus status, String balance,
-            String ownerEmail, String ownerName, Instant createdAt) {
+            String ownerEmail, String ownerName, Instant createdAt, UUID ownerId) {
+    }
+
+    public record CustomerProfile(UUID id, String firstName, String lastName, String email, Instant createdAt) {
+    }
+
+    public record CustomerAccount(UUID id, String iban, AccountType type, AccountStatus status, String nickname,
+            String balance, Instant createdAt) {
+    }
+
+    /** One ledger entry of one of the customer's accounts; amount is signed (money out is negative). */
+    public record CustomerActivity(Instant at, String accountIban, TransactionType type, String amount,
+            String balanceAfter, String description) {
+    }
+
+    /**
+     * Everything support needs to understand a customer's situation on one screen.
+     *
+     * @param loginLockedUntil null when the customer can log in
+     */
+    public record CustomerDetail(CustomerProfile profile, List<CustomerAccount> accounts,
+            List<CustomerActivity> recentActivity, int activeSessions, Instant loginLockedUntil, long activeOrders,
+            long pausedOrders) {
     }
 
     public record AccountPage(List<AccountRow> items, long total, int page, int size) {
