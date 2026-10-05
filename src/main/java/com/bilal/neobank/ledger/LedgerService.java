@@ -29,9 +29,11 @@ public class LedgerService {
     private final LedgerTransactionRepository transactionRepository;
     private final LedgerEntryRepository entryRepository;
     private final EntityManager entityManager;
+    private final HoldsProvider holds;
 
     public LedgerService(AccountRepository accountRepository, LedgerTransactionRepository transactionRepository,
-            LedgerEntryRepository entryRepository, EntityManager entityManager) {
+            LedgerEntryRepository entryRepository, EntityManager entityManager, HoldsProvider holds) {
+        this.holds = holds;
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.entryRepository = entryRepository;
@@ -77,8 +79,16 @@ public class LedgerService {
                 throw new AccountNotActiveException();
             }
             account.applyDelta(posting.amount());
-            if (account.getType() != AccountType.SYSTEM && account.getBalance().signum() < 0) {
-                throw new InsufficientFundsException();
+            if (account.getType() != AccountType.SYSTEM) {
+                if (account.getBalance().signum() < 0) {
+                    throw new InsufficientFundsException();
+                }
+                // Money reserved by card authorizations is not spendable. Checked only for a debit, and only after the
+                // plain balance check (this query would flush the changed balance, which the database refuses below 0).
+                if (posting.amount().signum() < 0
+                        && account.getBalance().subtract(holds.activeHolds(account.getId())).signum() < 0) {
+                    throw new InsufficientFundsException();
+                }
             }
             entryRepository.save(
                     new LedgerEntry(transaction.getId(), account.getId(), posting.amount(), account.getBalance(),

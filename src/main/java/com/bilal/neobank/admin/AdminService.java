@@ -19,6 +19,8 @@ import com.bilal.neobank.admin.AdminDtos.SecuritySnapshot;
 import com.bilal.neobank.admin.AdminDtos.Volume;
 import com.bilal.neobank.auth.AuthService;
 import com.bilal.neobank.auth.RefreshTokenService;
+import com.bilal.neobank.card.CardService;
+import com.bilal.neobank.ledger.HoldsProvider;
 import com.bilal.neobank.interest.InterestService;
 import com.bilal.neobank.ledger.Fingerprint;
 import com.bilal.neobank.ledger.LedgerReconciliationService;
@@ -55,11 +57,15 @@ public class AdminService {
     private final RateLimitProperties rateLimits;
     private final RateLimiter rateLimiter;
     private final RefreshTokenService refreshTokens;
+    private final CardService cardService;
+    private final HoldsProvider holds;
 
     public AdminService(AdminRepository repository, AccountRepository accountRepository,
             LedgerReconciliationService reconciliationService, InterestService interestService,
             RecurringExecutor recurringExecutor, Clock clock, RateLimitProperties rateLimits, RateLimiter rateLimiter,
-            RefreshTokenService refreshTokens) {
+            RefreshTokenService refreshTokens, CardService cardService, HoldsProvider holds) {
+        this.cardService = cardService;
+        this.holds = holds;
         this.refreshTokens = refreshTokens;
         this.rateLimits = rateLimits;
         this.rateLimiter = rateLimiter;
@@ -144,11 +150,16 @@ public class AdminService {
         if (account.getBalance().signum() != 0) {
             throw new AdminExceptions.AccountNotEmptyException(money(account.getBalance()));
         }
+        if (holds.activeHolds(accountId).signum() != 0) {
+            throw new AdminExceptions.AccountHasHoldsException();
+        }
         account.changeStatus(AccountStatus.CLOSED);
         accountRepository.save(account);
         int cancelled = repository.cancelOrdersOfAccount(accountId);
+        // the account row is locked, so the order is account first, then card (see the P2 spec)
+        int cancelledCards = cardService.cancelCardsOfAccount(accountId);
         repository.insertAction(adminId, "CLOSE_ACCOUNT", accountId, reason.trim(),
-                "cancelledOrders=" + cancelled, now());
+                "cancelledOrders=" + cancelled + (cancelledCards > 0 ? " cancelledCards=" + cancelledCards : ""), now());
     }
 
     /**

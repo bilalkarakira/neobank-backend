@@ -12,6 +12,7 @@ import com.bilal.neobank.ledger.InsufficientFundsException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import com.bilal.neobank.admin.AdminExceptions;
+import com.bilal.neobank.card.CardExceptions;
 import com.bilal.neobank.auth.MissingCsrfHeaderException;
 import com.bilal.neobank.auth.PasswordExceptions;
 import com.bilal.neobank.session.SessionNotFoundException;
@@ -182,6 +183,37 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AdminExceptions.AccountNotEmptyException.class)
     ProblemDetail handleAccountNotEmpty(AdminExceptions.AccountNotEmptyException ex) {
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Account not empty", ex.getMessage(), "ADMIN_ACCOUNT_NOT_EMPTY");
+    }
+
+    @ExceptionHandler(AdminExceptions.AccountHasHoldsException.class)
+    ProblemDetail handleAccountHasHolds(AdminExceptions.AccountHasHoldsException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Account has holds", ex.getMessage(), "ADMIN_ACCOUNT_HAS_HOLDS");
+    }
+
+    @ExceptionHandler(CardExceptions.CardNotFoundException.class)
+    ProblemDetail handleCardNotFound(CardExceptions.CardNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Card not found", ex.getMessage(), "CARD_NOT_FOUND");
+    }
+
+    @ExceptionHandler(CardExceptions.CardLimitReachedException.class)
+    ProblemDetail handleCardLimit(CardExceptions.CardLimitReachedException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Card limit reached", ex.getMessage(), "CARD_LIMIT_REACHED");
+    }
+
+    @ExceptionHandler(CardExceptions.AccountNotEligibleException.class)
+    ProblemDetail handleCardAccountNotEligible(CardExceptions.AccountNotEligibleException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Account not eligible", ex.getMessage(),
+                "CARD_ACCOUNT_NOT_ELIGIBLE");
+    }
+
+    @ExceptionHandler(CardExceptions.InvalidStateException.class)
+    ProblemDetail handleCardInvalidState(CardExceptions.InvalidStateException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Card state", ex.getMessage(), "CARD_INVALID_STATE");
+    }
+
+    @ExceptionHandler(CardExceptions.InvalidLimitException.class)
+    ProblemDetail handleCardInvalidLimit(CardExceptions.InvalidLimitException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid limit", ex.getMessage(), "INVALID_CARD_LIMIT");
     }
 
     @ExceptionHandler(AdminExceptions.NotLockedException.class)

@@ -52,6 +52,24 @@ app:
     daily-limit: 5000.00
   history:
     export-max-rows: 10000
+  cards:
+    # DEV ONLY default. Override with CARD_PAN_KEY (>= 32 characters) everywhere else: it keys the hashes of PANs and PINs.
+    pan-hmac-key: ${CARD_PAN_KEY:dev-only-card-key-change-me-0123456789abcdef}
+    max-per-customer: 3
+    default-daily-limit: 1000.00
+    max-daily-limit: 5000.00
+    per-transaction-cap: 2500.00
+    velocity-max: 10             # approvals per card within velocity-window
+    velocity-window: 10m
+    hold-ttl: 7d                 # an authorization stops reserving money after this, unless cleared
+    max-pin-failures: 3
+    blocked-mcc: [7995, 4829, 6051]
+    authorizations-enabled: true
+    listener:
+      enabled: true
+      port: 8583
+      max-connections: 50
+      idle-timeout: 120s
   catch-up:
     enabled: true         # run interest and due standing orders once at startup, so downtime does not delay them
   recurring:

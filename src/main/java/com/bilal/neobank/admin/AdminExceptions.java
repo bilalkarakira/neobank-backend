@@ -20,6 +20,13 @@ public final class AdminExceptions {
         }
     }
 
+    /** Money is reserved by card authorizations: closing would strand them. */
+    public static class AccountHasHoldsException extends RuntimeException {
+        public AccountHasHoldsException() {
+            super("The account has card payments waiting to be cleared. It can be closed once they are reversed or expired.");
+        }
+    }
+
     /** There is no active login lock for that email (never locked, already expired, or already unlocked). */
     public static class NotLockedException extends RuntimeException {
         public NotLockedException() {
