@@ -6,6 +6,8 @@ import com.bilal.neobank.admin.AdminDtos.AuditEntry;
 import com.bilal.neobank.admin.AdminDtos.Overview;
 import com.bilal.neobank.admin.AdminDtos.Reconciliation;
 import com.bilal.neobank.admin.AdminDtos.ReasonRequest;
+import com.bilal.neobank.admin.AdminDtos.SecuritySnapshot;
+import com.bilal.neobank.admin.AdminDtos.UnlockLoginRequest;
 import com.bilal.neobank.interest.InterestService;
 import com.bilal.neobank.recurring.RecurringExecutor;
 import jakarta.validation.Valid;
@@ -62,6 +64,24 @@ public class AdminController {
     public void unfreeze(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
             @Valid @RequestBody ReasonRequest request) {
         service.unfreeze(UUID.fromString(jwt.getSubject()), id, request.reason());
+    }
+
+    @GetMapping("/api/admin/security")
+    public SecuritySnapshot security() {
+        return service.security();
+    }
+
+    @PostMapping("/api/admin/security/login-lockouts/unlock")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unlockLogin(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody UnlockLoginRequest request) {
+        service.unlockLogin(UUID.fromString(jwt.getSubject()), request.email(), request.reason());
+    }
+
+    @PostMapping("/api/admin/security/probing-blocks/{userId}/clear")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void clearProbingBlock(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID userId,
+            @Valid @RequestBody ReasonRequest request) {
+        service.clearProbingBlock(UUID.fromString(jwt.getSubject()), userId, request.reason());
     }
 
     @PostMapping("/api/admin/jobs/interest")

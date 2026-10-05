@@ -25,8 +25,32 @@ public final class AdminDtos {
     public record RecurringHealth(long active, long paused, long failedRunsLast7Days) {
     }
 
+    /** Customers currently locked out of login, and users currently blocked for probing IBANs. */
+    public record SecurityCounts(long lockedLogins, long probingBlocks) {
+    }
+
     public record Overview(Instant generatedAt, long customers, AccountCounts accounts, String depositsHeld,
-            Volume transfersLast24Hours, Volume transfersLast30Days, String interestPaid, RecurringHealth recurring) {
+            Volume transfersLast24Hours, Volume transfersLast30Days, String interestPaid, RecurringHealth recurring,
+            SecurityCounts security) {
+    }
+
+    /** A customer who cannot log in right now because of too many wrong passwords. */
+    public record LockedLogin(String email, int failures, Instant lockedUntil) {
+    }
+
+    /** A user who cannot look up or send to IBANs right now because of too many unknown ones. */
+    public record ProbingBlock(UUID userId, String email, int misses, Instant blockedUntil) {
+    }
+
+    /**
+     * @param otherLockedAddresses locked addresses that belong to no customer (typos, scanners): nobody is harmed by
+     *                             those locks, and their hashes are never exposed
+     */
+    public record SecuritySnapshot(List<LockedLogin> lockedLogins, long otherLockedAddresses,
+            List<ProbingBlock> probingBlocks) {
+    }
+
+    public record UnlockLoginRequest(@NotBlank @Size(max = 254) String email, @NotBlank @Size(max = 200) String reason) {
     }
 
     public record Reconciliation(boolean healthy, String totalOfAllEntries, List<UUID> accountsWithWrongBalance,

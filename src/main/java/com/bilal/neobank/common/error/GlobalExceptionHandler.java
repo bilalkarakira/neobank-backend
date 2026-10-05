@@ -151,6 +151,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.FORBIDDEN, "Request not allowed", ex.getMessage(), "CSRF_HEADER_REQUIRED");
     }
 
+    @ExceptionHandler(AdminExceptions.NotLockedException.class)
+    ProblemDetail handleNotLocked(AdminExceptions.NotLockedException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Not locked", ex.getMessage(), "NOT_LOCKED");
+    }
+
+    @ExceptionHandler(AdminExceptions.NotBlockedException.class)
+    ProblemDetail handleNotBlocked(AdminExceptions.NotBlockedException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Not blocked", ex.getMessage(), "NOT_BLOCKED");
+    }
+
     @ExceptionHandler(AdminExceptions.InvalidStateException.class)
     ProblemDetail handleAdminState(AdminExceptions.InvalidStateException ex) {
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Account state", ex.getMessage(), "ADMIN_INVALID_STATE");

@@ -10,11 +10,18 @@ import com.bilal.neobank.admin.AdminDtos.AccountPage;
 import com.bilal.neobank.admin.AdminDtos.AccountRow;
 import com.bilal.neobank.admin.AdminDtos.AuditEntry;
 import com.bilal.neobank.admin.AdminDtos.Overview;
+import com.bilal.neobank.admin.AdminDtos.ProbingBlock;
 import com.bilal.neobank.admin.AdminDtos.Reconciliation;
 import com.bilal.neobank.admin.AdminDtos.RecurringHealth;
+import com.bilal.neobank.admin.AdminDtos.SecurityCounts;
+import com.bilal.neobank.admin.AdminDtos.SecuritySnapshot;
 import com.bilal.neobank.admin.AdminDtos.Volume;
+import com.bilal.neobank.auth.AuthService;
 import com.bilal.neobank.interest.InterestService;
+import com.bilal.neobank.ledger.Fingerprint;
 import com.bilal.neobank.ledger.LedgerReconciliationService;
+import com.bilal.neobank.ratelimit.RateLimitProperties;
+import com.bilal.neobank.ratelimit.RateLimiter;
 import com.bilal.neobank.recurring.RecurringExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +30,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -42,10 +50,14 @@ public class AdminService {
     private final InterestService interestService;
     private final RecurringExecutor recurringExecutor;
     private final Clock clock;
+    private final RateLimitProperties rateLimits;
+    private final RateLimiter rateLimiter;
 
     public AdminService(AdminRepository repository, AccountRepository accountRepository,
             LedgerReconciliationService reconciliationService, InterestService interestService,
-            RecurringExecutor recurringExecutor, Clock clock) {
+            RecurringExecutor recurringExecutor, Clock clock, RateLimitProperties rateLimits, RateLimiter rateLimiter) {
+        this.rateLimits = rateLimits;
+        this.rateLimiter = rateLimiter;
         this.repository = repository;
         this.accountRepository = accountRepository;
         this.reconciliationService = reconciliationService;
@@ -66,7 +78,8 @@ public class AdminService {
                 money(repository.depositsHeld()), new Volume(day.count(), money(day.amount())),
                 new Volume(month.count(), money(month.amount())), money(repository.interestPaid()),
                 new RecurringHealth(repository.recurringCount("ACTIVE"), repository.recurringCount("PAUSED"),
-                        repository.failedRecurringRunsSince(now.minus(Duration.ofDays(7)))));
+                        repository.failedRecurringRunsSince(now.minus(Duration.ofDays(7)))),
+                new SecurityCounts(repository.lockedLogins(now).size(), probingBlocks().size()));
     }
 
     @Transactional(readOnly = true)
@@ -130,6 +143,53 @@ public class AdminService {
     @Transactional(readOnly = true)
     public List<AuditEntry> audit() {
         return repository.recentActions(AUDIT_LIMIT);
+    }
+
+    @Transactional(readOnly = true)
+    public SecuritySnapshot security() {
+        OffsetDateTime now = now();
+        return new SecuritySnapshot(repository.lockedLogins(now), repository.lockedAddressesWithoutCustomer(now),
+                probingBlocks());
+    }
+
+    /** Users whose misses in the current window have reached the limit, with the time the window (and block) ends. */
+    private List<ProbingBlock> probingBlocks() {
+        RateLimitProperties.Window probe = rateLimits.probeMisses();
+        Instant start = rateLimiter.windowStart(probe.window());
+        return repository.probingBlocks(at(start), probe.limit(), at(start.plus(probe.window())));
+    }
+
+    /**
+     * Ends an active login lock. The unlock and its audit row are one transaction, like every other admin change.
+     * Only an ACTIVE lock counts: an expired one needs no help, and "unlocking" a customer who is not locked would
+     * silently wipe their failure count for nothing.
+     */
+    @Transactional
+    public void unlockLogin(UUID adminId, String email, String reason) {
+        String normalized = AuthService.normalizeEmail(email);
+        if (repository.unlockLogin(Fingerprint.sha256(normalized), now()) == 0) {
+            throw new AdminExceptions.NotLockedException();
+        }
+        repository.insertAction(adminId, "UNLOCK_LOGIN", null, reason.trim(), "email=" + normalized, now());
+    }
+
+    /** Lifts a probing block: clears this user's miss and lookup counters for the current windows. */
+    @Transactional
+    public void clearProbingBlock(UUID adminId, UUID userId, String reason) {
+        RateLimitProperties.Window probe = rateLimits.probeMisses();
+        String email = repository.userEmail(userId).orElseThrow(AdminExceptions.NotBlockedException::new);
+        String probeKey = "probe:" + userId;
+        if (rateLimiter.current(probeKey, probe.window()) < probe.limit()) {
+            throw new AdminExceptions.NotBlockedException(); // below the limit: there is no block to lift
+        }
+        repository.deleteCounter(probeKey, at(rateLimiter.windowStart(probe.window())));
+        Duration lookupWindow = rateLimits.lookupPerUser().window();
+        repository.deleteCounter("lookup:" + userId, at(rateLimiter.windowStart(lookupWindow)));
+        repository.insertAction(adminId, "CLEAR_PROBING_BLOCK", null, reason.trim(), "user=" + email, now());
+    }
+
+    private static OffsetDateTime at(Instant instant) {
+        return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
     private OffsetDateTime now() {

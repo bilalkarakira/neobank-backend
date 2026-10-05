@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Read-only statistics, account search and the audit log. Bank-internal (SYSTEM) accounts are never listed. */
@@ -90,6 +91,55 @@ public class AdminRepository {
         Filter filter = filter(query, status);
         return jdbc.sql("select count(*) from accounts a join users u on u.id = a.user_id " + filter.where)
                 .params(filter.params).query(Long.class).single();
+    }
+
+    /**
+     * Customers whose login is locked right now. Lock records only hold a hash of the email, so a customer is found by
+     * hashing the stored (already normalised) email the same way.
+     */
+    public List<AdminDtos.LockedLogin> lockedLogins(OffsetDateTime now) {
+        return jdbc.sql("""
+                select u.email, f.failures, f.locked_until
+                from login_failures f join users u on encode(sha256(convert_to(u.email, 'UTF8')), 'hex') = f.email_hash
+                where f.locked_until > :now order by f.locked_until desc, u.email
+                """).param("now", now)
+                .query((rs, i) -> new AdminDtos.LockedLogin(rs.getString("email"), rs.getInt("failures"),
+                        rs.getObject("locked_until", OffsetDateTime.class).toInstant()))
+                .list();
+    }
+
+    public long lockedAddressesWithoutCustomer(OffsetDateTime now) {
+        return jdbc.sql("""
+                select count(*) from login_failures f
+                where f.locked_until > :now
+                  and not exists (select 1 from users u where encode(sha256(convert_to(u.email, 'UTF8')), 'hex') = f.email_hash)
+                """).param("now", now).query(Long.class).single();
+    }
+
+    /** @return 1 when an ACTIVE lock was removed, 0 when there was none (expired locks do not count) */
+    public int unlockLogin(String emailHash, OffsetDateTime now) {
+        return jdbc.sql("delete from login_failures where email_hash = :hash and locked_until > :now")
+                .param("hash", emailHash).param("now", now).update();
+    }
+
+    /** Users whose miss counter in the CURRENT window has reached the limit. */
+    public List<AdminDtos.ProbingBlock> probingBlocks(OffsetDateTime windowStart, int limit, OffsetDateTime blockedUntil) {
+        return jdbc.sql("""
+                select u.id, u.email, r.hits from rate_limits r join users u on r.bucket_key = 'probe:' || u.id::text
+                where r.window_start = :start and r.hits >= :limit order by r.hits desc, u.email
+                """).param("start", windowStart).param("limit", limit)
+                .query((rs, i) -> new AdminDtos.ProbingBlock(rs.getObject("id", UUID.class), rs.getString("email"),
+                        rs.getInt("hits"), blockedUntil.toInstant()))
+                .list();
+    }
+
+    public int deleteCounter(String bucketKey, OffsetDateTime windowStart) {
+        return jdbc.sql("delete from rate_limits where bucket_key = :key and window_start = :start")
+                .param("key", bucketKey).param("start", windowStart).update();
+    }
+
+    public Optional<String> userEmail(UUID userId) {
+        return jdbc.sql("select email from users where id = :id").param("id", userId).query(String.class).optional();
     }
 
     public void insertAction(UUID adminId, String action, UUID accountId, String reason, String detail,

@@ -77,7 +77,7 @@ public class RateLimiter {
     }
 
     /** Now, rounded down to the window length: the same instant on every instance. */
-    private Instant windowStart(Duration window) {
+    public Instant windowStart(Duration window) {
         long length = window.toSeconds();
         long now = clock.instant().getEpochSecond();
         return Instant.ofEpochSecond(now - Math.floorMod(now, length));
