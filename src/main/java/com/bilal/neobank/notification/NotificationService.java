@@ -115,6 +115,13 @@ public class NotificationService {
                 .param("now", now()).param("user", userId).update();
     }
 
+    /** Housekeeping: removes notices created more than {@code retention} ago (read or not). Returns how many. */
+    @Transactional
+    public int purge(java.time.Duration retention) {
+        return jdbc.sql("delete from notifications where created_at < :cutoff")
+                .param("cutoff", now().minus(retention)).update();
+    }
+
     private void insert(UUID userId, String kind, String title, String body) {
         jdbc.sql("insert into notifications (id, user_id, kind, title, body, created_at) values (:id, :user, :kind, :title, :body, :now)")
                 .param("id", UUID.randomUUID()).param("user", userId).param("kind", kind).param("title", title)
