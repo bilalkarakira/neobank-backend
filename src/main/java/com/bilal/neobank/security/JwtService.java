@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class JwtService {
@@ -23,15 +24,22 @@ public class JwtService {
         this.properties = properties;
     }
 
-    public TokenResponse issue(User user) {
+    /**
+     * @param sessionId the login (refresh-token family) this access token belongs to, as the "sid" claim: it is how the
+     *                  server knows which entry of the session list is "this device". Null leaves the claim out.
+     */
+    public TokenResponse issue(User user, UUID sessionId) {
         Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
+        JwtClaimsSet.Builder builder = JwtClaimsSet.builder()
                 .subject(user.getId().toString())
                 .claim("email", user.getEmail())
                 .claim("roles", List.of(user.getRole().name()))
                 .issuedAt(now)
-                .expiresAt(now.plus(properties.ttl()))
-                .build();
+                .expiresAt(now.plus(properties.ttl()));
+        if (sessionId != null) {
+            builder.claim("sid", sessionId.toString());
+        }
+        JwtClaimsSet claims = builder.build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
         return new TokenResponse(token, "Bearer", properties.ttl().toSeconds());

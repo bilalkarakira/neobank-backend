@@ -76,8 +76,10 @@ public class AuthController {
             throw e;
         }
         lockout.recordSuccess(email);
-        RefreshTokenService.Issued refresh = refreshTokens.issueForLogin(user);
-        return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookies.set(refresh)).body(jwtService.issue(user));
+        RefreshTokenService.Issued refresh = refreshTokens.issueForLogin(user, DeviceLabel.of(http.getHeader(HttpHeaders.USER_AGENT)),
+                ClientIp.of(http));
+        return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookies.set(refresh))
+                .body(jwtService.issue(user, refresh.familyId()));
     }
 
     /** Exchanges the refresh cookie for a new access token and a new refresh cookie (rotation). */
@@ -89,7 +91,7 @@ public class AuthController {
         try {
             RefreshTokenService.Rotation rotation = refreshTokens.rotate(refreshToken);
             return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookies.set(rotation.issued()))
-                    .body(jwtService.issue(rotation.user()));
+                    .body(jwtService.issue(rotation.user(), rotation.issued().familyId()));
         } catch (InvalidRefreshTokenException e) {
             ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED,
                     "The session has expired. Please log in again.");

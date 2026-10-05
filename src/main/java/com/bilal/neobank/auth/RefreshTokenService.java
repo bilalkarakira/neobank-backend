@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -28,7 +29,7 @@ public class RefreshTokenService {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     /** @param rawToken the value for the cookie; never stored */
-    public record Issued(String rawToken, Instant expiresAt) {
+    public record Issued(String rawToken, Instant expiresAt, UUID familyId) {
     }
 
     public record Rotation(User user, Issued issued) {
@@ -47,12 +48,12 @@ public class RefreshTokenService {
         this.clock = clock;
     }
 
-    /** Starts a new family: one per login. */
+    /** Starts a new family: one per login. [device] and [ip] describe where it came from, for the session list. */
     @Transactional
-    public Issued issueForLogin(User user) {
+    public Issued issueForLogin(User user, String device, String ip) {
         OffsetDateTime now = now();
         OffsetDateTime familyExpires = now.plus(properties.maxLifetime());
-        return insert(user.getId(), UUID.randomUUID(), now, familyExpires);
+        return insert(user.getId(), UUID.randomUUID(), now, familyExpires, device, ip, now);
     }
 
     /**
@@ -87,7 +88,8 @@ public class RefreshTokenService {
         // a deleted user's tokens are worthless, and the role is read fresh so changes apply at every refresh
         User user = userRepository.findById(row.userId()).orElseThrow(InvalidRefreshTokenException::new);
         repository.markRotated(row.id(), now);
-        return new Rotation(user, insert(row.userId(), row.familyId(), now, row.familyExpiresAt()));
+        return new Rotation(user, insert(row.userId(), row.familyId(), now, row.familyExpiresAt(), row.device(), row.ip(),
+                row.familyStartedAt()));
     }
 
     /** Logout of one device: ends the login this token belongs to. Unknown tokens are ignored. */
@@ -97,6 +99,24 @@ public class RefreshTokenService {
             return;
         }
         repository.findByHashForUpdate(hash(rawToken)).ifPresent(row -> repository.revokeFamily(row.familyId(), now()));
+    }
+
+    /** The user's logins that can still be refreshed, most recently active first. */
+    @Transactional(readOnly = true)
+    public List<RefreshTokenRepository.Session> activeSessions(UUID userId) {
+        return repository.activeSessions(userId, now());
+    }
+
+    /** Ends one login of this user. @return false when the id is not one of THEIR logins */
+    @Transactional
+    public boolean revokeSession(UUID userId, UUID sessionId) {
+        return repository.revokeFamilyOfUser(userId, sessionId, now()) > 0;
+    }
+
+    /** Ends every login except the given one (null ends all). */
+    @Transactional
+    public int revokeAllExcept(UUID userId, UUID keepSessionId) {
+        return repository.revokeAllExcept(userId, keepSessionId, now());
     }
 
     /** Logout everywhere. @return how many tokens were revoked */
@@ -111,7 +131,8 @@ public class RefreshTokenService {
         return repository.deleteExpiredBefore(now().minus(Duration.ofDays(1)));
     }
 
-    private Issued insert(UUID userId, UUID familyId, OffsetDateTime now, OffsetDateTime familyExpires) {
+    private Issued insert(UUID userId, UUID familyId, OffsetDateTime now, OffsetDateTime familyExpires, String device,
+            String ip, OffsetDateTime familyStartedAt) {
         byte[] bytes = new byte[32];
         RANDOM.nextBytes(bytes);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
@@ -119,8 +140,9 @@ public class RefreshTokenService {
         if (expires.isAfter(familyExpires)) {
             expires = familyExpires; // sliding, but never past the absolute limit
         }
-        repository.insert(UUID.randomUUID(), userId, familyId, hash(raw), now, expires, familyExpires);
-        return new Issued(raw, expires.toInstant());
+        repository.insert(UUID.randomUUID(), userId, familyId, hash(raw), now, expires, familyExpires, device, ip,
+                familyStartedAt);
+        return new Issued(raw, expires.toInstant(), familyId);
     }
 
     private static String hash(String raw) {

@@ -51,6 +51,11 @@ public class User {
         this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS); // Postgres keeps microseconds; keep API values identical to stored ones
     }
 
+    /** Takes an already-hashed password; hashing is the caller's job so this entity never sees plain text. */
+    public void changePasswordHash(String newHash) {
+        this.passwordHash = newHash;
+    }
+
     public UUID getId() { return id; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }

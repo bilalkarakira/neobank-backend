@@ -13,6 +13,8 @@ import org.springframework.beans.TypeMismatchException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import com.bilal.neobank.admin.AdminExceptions;
 import com.bilal.neobank.auth.MissingCsrfHeaderException;
+import com.bilal.neobank.auth.PasswordExceptions;
+import com.bilal.neobank.session.SessionNotFoundException;
 import com.bilal.neobank.ratelimit.RateLimitExceededException;
 import com.bilal.neobank.recurring.RecurringExceptions;
 import com.bilal.neobank.transfer.TransferExceptions;
@@ -149,6 +151,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(MissingCsrfHeaderException.class)
     ProblemDetail handleMissingCsrfHeader(MissingCsrfHeaderException ex) {
         return problem(HttpStatus.FORBIDDEN, "Request not allowed", ex.getMessage(), "CSRF_HEADER_REQUIRED");
+    }
+
+    @ExceptionHandler(PasswordExceptions.WrongCurrentPasswordException.class)
+    ProblemDetail handleWrongCurrentPassword(PasswordExceptions.WrongCurrentPasswordException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Wrong password", ex.getMessage(), "WRONG_CURRENT_PASSWORD");
+    }
+
+    @ExceptionHandler(PasswordExceptions.SamePasswordException.class)
+    ProblemDetail handleSamePassword(PasswordExceptions.SamePasswordException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Same password", ex.getMessage(), "SAME_PASSWORD");
+    }
+
+    @ExceptionHandler(SessionNotFoundException.class)
+    ProblemDetail handleSessionNotFound(SessionNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Session not found", ex.getMessage(), "SESSION_NOT_FOUND");
     }
 
     @ExceptionHandler(AdminExceptions.NotLockedException.class)

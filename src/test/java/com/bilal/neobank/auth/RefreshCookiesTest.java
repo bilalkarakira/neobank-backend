@@ -20,20 +20,20 @@ class RefreshCookiesTest {
 
     @Test
     void productionSettingMarksTheCookieSecure() {
-        String header = cookies(true).set(new RefreshTokenService.Issued("abc", CLOCK.instant().plusSeconds(3600)));
+        String header = cookies(true).set(new RefreshTokenService.Issued("abc", CLOCK.instant().plusSeconds(3600), java.util.UUID.randomUUID()));
         assertThat(header).contains("Secure").contains("HttpOnly").contains("SameSite=Strict")
                 .contains("Path=/api/auth").contains("Max-Age=3600");
     }
 
     @Test
     void theLifetimeFollowsTheTokenSoTheCookieAndTheDatabaseExpireTogether() {
-        String header = cookies(false).set(new RefreshTokenService.Issued("abc", CLOCK.instant().plus(Duration.ofDays(2))));
+        String header = cookies(false).set(new RefreshTokenService.Issued("abc", CLOCK.instant().plus(Duration.ofDays(2)), java.util.UUID.randomUUID()));
         assertThat(header).contains("Max-Age=172800").doesNotContain("Secure");
     }
 
     @Test
     void anAlreadyExpiredTokenGivesAZeroLifetimeNotANegativeOne() {
-        String header = cookies(false).set(new RefreshTokenService.Issued("abc", CLOCK.instant().minusSeconds(60)));
+        String header = cookies(false).set(new RefreshTokenService.Issued("abc", CLOCK.instant().minusSeconds(60), java.util.UUID.randomUUID()));
         assertThat(header).contains("Max-Age=0");
     }
 

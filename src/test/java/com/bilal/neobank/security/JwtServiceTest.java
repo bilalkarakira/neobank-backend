@@ -31,7 +31,7 @@ class JwtServiceTest {
     void issuedTokenCarriesExpectedClaimsAndExpiresInFifteenMinutes() {
         User user = new User("bilal@example.com", "hash", "Bilal", "Karakira", Role.CUSTOMER);
 
-        TokenResponse response = jwtService.issue(user);
+        TokenResponse response = jwtService.issue(user, null);
         Jwt jwt = NimbusJwtDecoder.withSecretKey(KEY).macAlgorithm(MacAlgorithm.HS256).build()
                 .decode(response.accessToken());
 
@@ -42,6 +42,19 @@ class JwtServiceTest {
         assertThat(jwt.getClaimAsStringList("roles")).containsExactly("CUSTOMER");
         assertThat(Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt())).isEqualTo(Duration.ofMinutes(15));
         assertThat(jwt.getExpiresAt()).isAfter(Instant.now());
+    }
+
+    @Test
+    void theSessionIdIsACustomClaimWhenGivenAndAbsentWhenNot() {
+        User user = new User("bilal@example.com", "hash", "Bilal", "Karakira", Role.CUSTOMER);
+        java.util.UUID session = java.util.UUID.randomUUID();
+        var decoder = NimbusJwtDecoder.withSecretKey(KEY).macAlgorithm(MacAlgorithm.HS256).build();
+
+        Jwt with = decoder.decode(jwtService.issue(user, session).accessToken());
+        Jwt without = decoder.decode(jwtService.issue(user, null).accessToken());
+
+        assertThat(with.getClaimAsString("sid")).isEqualTo(session.toString());
+        assertThat(without.hasClaim("sid")).isFalse(); // an old-style token: no entry is "this device"
     }
 
     @Test
