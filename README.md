@@ -20,6 +20,15 @@ Visa and Mastercard profiles are proprietary, so this is **not** a scheme specif
 ./mvnw.cmd test        # JDK 21+; this machine uses JDK 27 (set JAVA_HOME)
 ```
 
+## Poke the issuer by hand
+`tools/SmokeClient.java` signs on and sends one authorization (and optionally a duplicate and a reversal) to the issuer, then prints
+both messages decoded. It is a stopgap until the virtual POS of a later phase exists.
+
+```bash
+java -cp iso8583/target/iso8583-0.1.0-SNAPSHOT.jar tools/SmokeClient.java \
+  --pan 9999000000000012 --expiry 2910 --amount 12.50 --pin 4321 --merchant "Corner Cafe"   # add --reverse, --resend, --port
+```
+
 ## Inspect a message
 
 ```bash
