@@ -9,6 +9,14 @@ docker compose up -d          # Postgres :5433 (5432 is often taken by a local i
 ```
 Health check: http://localhost:8080/actuator/health
 
+**Card issuing needs the ISO 8583 codec from the sibling repo.** Install it once (and again after changing it):
+```bash
+cd ../neobank-cardnet && ./mvnw install     # puts com.bilal.cardnet:iso8583 in your local Maven repository
+```
+The API then also listens for ISO 8583 card messages on 127.0.0.1:8583 (`app.cards.listener.*`; localhost only, no TLS).
+The key that hashes card numbers and PINs is `CARD_PAN_KEY` (>= 32 characters; a development default is built in).
+This is a card-*issuing* simulation: no licence, no real card scheme, test BIN 999900.
+
 Requires JDK 21+ (set `JAVA_HOME`). See [../docs/plan.md](../docs/plan.md) for the plan.
 
 ## Demo data (for the dashboard)

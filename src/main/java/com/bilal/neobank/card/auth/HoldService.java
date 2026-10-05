@@ -35,22 +35,40 @@ public class HoldService {
     }
 
     /**
-     * Saves an approved authorization if the account can afford it. Joins a surrounding transaction (the card engine
-     * calls this after it has locked the account itself; locking again is harmless).
-     *
-     * @throws InsufficientFundsException when available balance (balance minus holds) is below the amount
+     * Locks an account row and re-reads it, so the caller decides on the balance as it is now. Locking again in the same
+     * transaction is harmless. Lock order for the whole application: the account row first, then any card row.
      */
-    @Transactional
-    public Authorization reserve(Authorization approved) {
-        Account account = accountRepository.lockAllOrderedById(List.of(approved.getAccountId())).stream().findFirst()
+    public Account lockAccount(java.util.UUID accountId) {
+        Account account = accountRepository.lockAllOrderedById(List.of(accountId)).stream().findFirst()
                 .orElseThrow(AccountNotFoundException::new);
         entityManager.refresh(account); // see LedgerService: never trust a balance loaded before the lock
+        return account;
+    }
+
+    /**
+     * Saves an approved authorization if the account can afford it and says whether it did. Returning false (rather
+     * than throwing) matters: an exception passing through a transactional method would mark the caller's transaction
+     * rollback-only, and a decline must still be recorded.
+     */
+    @Transactional
+    public boolean tryReserve(Authorization approved) {
+        Account account = lockAccount(approved.getAccountId());
         if (account.getStatus() != AccountStatus.ACTIVE) {
             throw new AccountNotActiveException();
         }
         if (account.getBalance().subtract(holds.activeHolds(account.getId())).compareTo(approved.getAmount()) < 0) {
+            return false;
+        }
+        authorizationRepository.saveAndFlush(approved);
+        return true;
+    }
+
+    /** Same, but refuses with an exception. Used where there is no decline to record. */
+    @Transactional
+    public Authorization reserve(Authorization approved) {
+        if (!tryReserve(approved)) {
             throw new InsufficientFundsException();
         }
-        return authorizationRepository.saveAndFlush(approved);
+        return approved;
     }
 }

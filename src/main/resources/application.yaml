@@ -65,6 +65,7 @@ app:
     max-pin-failures: 3
     blocked-mcc: [7995, 4829, 6051]
     authorizations-enabled: true
+    expiry-scheduler-enabled: true   # daily job that marks expired holds (they stop reserving money at expiry anyway)
     listener:
       enabled: true
       port: 8583

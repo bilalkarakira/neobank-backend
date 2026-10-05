@@ -63,6 +63,12 @@
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
 
+		<!-- ISO 8583 codec of the card network simulation (neobank-cardnet): run `mvnw install` there first -->
+		<dependency>
+			<groupId>com.bilal.cardnet</groupId>
+			<artifactId>iso8583</artifactId>
+			<version>0.1.0-SNAPSHOT</version>
+		</dependency>
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>

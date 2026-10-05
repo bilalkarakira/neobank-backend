@@ -62,6 +62,14 @@ public class NotificationService {
         }
     }
 
+    /** Joins the caller's transaction: the notice exists exactly when the freeze does. */
+    @Transactional
+    public void cardFrozenByPin(UUID userId, String last4) {
+        insert(userId, "CARD_FROZEN_PIN", "Your card was frozen",
+                "Your card ending %s was frozen on %s after too many wrong PINs. If that was you, unfreeze it on the Cards page. If not, keep it frozen and cancel it."
+                        .formatted(last4, WHEN.format(now())));
+    }
+
     @Transactional
     public void passwordChanged(UUID userId) {
         insert(userId, "PASSWORD_CHANGED", "Your password was changed",
