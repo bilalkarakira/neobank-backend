@@ -88,7 +88,7 @@ public class HistoryService {
         // a category is the SENDER's label for their own spending, so the receiver never sees it
         String category = direction == Direction.OUT ? row.categoryName() : null;
         return new TransactionItem(row.transactionId(), row.type(), direction, money(row.amount()),
-                money(row.balanceAfter()), row.description(), category, counterparty(row, userId), row.createdAt());
+                money(row.balanceAfter()), row.description(), category, counterparty(row, userId), row.createdAt(), row.recurring());
     }
 
     private static Counterparty counterparty(HistoryRow row, UUID userId) {
