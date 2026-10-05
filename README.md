@@ -19,6 +19,11 @@ This is a card-*issuing* simulation: no licence, no real card scheme, test BIN 9
 
 Requires JDK 21+ (set `JAVA_HOME`). See [../docs/plan.md](../docs/plan.md) for the plan.
 
+## Demo card
+The `demo` profile also gives the demo customer one test card on the checking account (also added to a demo database that was
+seeded before cards existed): number `9999 0000 0000 0012`, PIN `4321`, expiry shown on the Cards page (the issuer wants it as YYMM).
+It is a published test number, not a secret. Send it a payment with the smoke client in `../neobank-cardnet/tools`.
+
 ## Demo data (for the dashboard)
 Start the API with the `demo` profile to get a demo customer with about six months of believable activity:
 ```bash

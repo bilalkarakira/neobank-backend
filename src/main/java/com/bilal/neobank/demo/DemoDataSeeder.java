@@ -21,6 +21,8 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import com.bilal.neobank.card.CardService;
+import com.bilal.neobank.card.Luhn;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -56,6 +58,9 @@ public class DemoDataSeeder implements ApplicationRunner {
 
     public static final String DEMO_EMAIL = "demo@neobank.local";
     public static final String DEMO_PASSWORD = "DemoPassw0rd";
+    /** Test BIN 999900 + 000000001 + Luhn check digit. A published demo number, not a secret. */
+    public static final String DEMO_CARD_PAN = "999900000000001" + Luhn.checkDigit("999900000000001");
+    public static final String DEMO_CARD_PIN = "4321";
     private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
 
     /** How one month of interest was computed (kept in interest_accruals next to its transaction). */
@@ -95,11 +100,14 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final TransactionTemplate transactions;
     private final boolean seedOnStartup;
     private final InterestProperties interestProperties;
+    private final CardService cardService;
 
     public DemoDataSeeder(UserRepository userRepository, AccountRepository accountRepository,
             CategoryRepository categoryRepository, PasswordEncoder passwordEncoder, JdbcTemplate jdbc,
             LedgerReconciliationService reconciliation, Clock clock, PlatformTransactionManager transactionManager,
-            InterestProperties interestProperties, @Value("${app.demo.seed-on-startup:true}") boolean seedOnStartup) {
+            InterestProperties interestProperties, CardService cardService,
+            @Value("${app.demo.seed-on-startup:true}") boolean seedOnStartup) {
+        this.cardService = cardService;
         this.seedOnStartup = seedOnStartup;
         this.interestProperties = interestProperties;
         this.userRepository = userRepository;
@@ -116,7 +124,27 @@ public class DemoDataSeeder implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         if (seedOnStartup) {
             seed();
+            seedDemoCard();
         }
+    }
+
+    /**
+     * One card with a known number for the demo customer, so card payments can be sent from a terminal. Separate from
+     * {@link #seed()} because it must also reach a demo database that was seeded before cards existed. Idempotent.
+     */
+    public boolean seedDemoCard() {
+        var owner = jdbc.query("""
+                select a.id, a.user_id from accounts a join users u on u.id = a.user_id
+                where u.email = ? and a.type = 'CHECKING' and a.status = 'ACTIVE' order by a.created_at limit 1
+                """, (rs, i) -> new UUID[] { rs.getObject(1, UUID.class), rs.getObject(2, UUID.class) }, DEMO_EMAIL);
+        if (owner.isEmpty()) {
+            return false;
+        }
+        boolean created = cardService.issueDemoCard(owner.get(0)[1], owner.get(0)[0], "Demo card", DEMO_CARD_PAN, DEMO_CARD_PIN);
+        if (created) {
+            log.info("Demo card created: number {} (test BIN), PIN {}", DEMO_CARD_PAN, DEMO_CARD_PIN);
+        }
+        return created;
     }
 
     /** @return true when data was created, false when the demo user already existed */

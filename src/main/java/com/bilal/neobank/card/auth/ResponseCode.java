@@ -34,7 +34,7 @@ public final class ResponseCode {
             case INSUFFICIENT_FUNDS -> "Not enough available money.";
             case EXPIRED_CARD -> "The card has expired.";
             case WRONG_PIN -> "Wrong PIN.";
-            case NOT_PERMITTED -> "This kind of payment is not allowed on the card.";
+            case NOT_PERMITTED -> "The card is frozen, or this kind of payment is not allowed on it.";
             case EXCEEDS_LIMIT -> "Over the card's spending limit.";
             case VELOCITY -> "Too many payments in a short time.";
             case PIN_TRIES_EXCEEDED -> "Too many wrong PINs: the card was frozen.";

@@ -85,7 +85,32 @@ public class CardService {
             panHash = crypto.hashPan(pan);
         } while (cardRepository.existsByPanHash(panHash));
 
-        String pin = "%04d".formatted(RANDOM.nextInt(10_000));
+        return create(userId, account, nickname, pan, panHash, "%04d".formatted(RANDOM.nextInt(10_000)));
+    }
+
+    /**
+     * Demo data only: a card with a KNOWN number and PIN, so the demo can be driven from a terminal. Does nothing and
+     * returns false when that number already exists. The same rules as {@link #issue} apply to the account.
+     */
+    @Transactional
+    public boolean issueDemoCard(UUID userId, UUID accountId, String nickname, String pan, String pin) {
+        if (pan.length() != 16 || !pan.startsWith(BIN) || !Luhn.isValid(pan) || !pin.matches("\\d{4}")) {
+            throw new IllegalArgumentException("a demo card needs a 16 digit Luhn number in BIN " + BIN + " and a 4 digit PIN");
+        }
+        String panHash = crypto.hashPan(pan);
+        if (cardRepository.existsByPanHash(panHash)) {
+            return false;
+        }
+        Account account = accountRepository.findByIdAndUserId(accountId, userId).orElseThrow(AccountNotFoundException::new);
+        if (account.getType() != AccountType.CHECKING || account.getStatus() != AccountStatus.ACTIVE) {
+            throw new CardExceptions.AccountNotEligibleException();
+        }
+        create(userId, account, nickname, pan, panHash, pin);
+        return true;
+    }
+
+    private IssuedCard create(UUID userId, Account account, String nickname, String pan, String panHash, String pin) {
+        UUID accountId = account.getId();
         UUID id = UUID.randomUUID();
         Instant now = clock.instant();
         YearMonth expiry = YearMonth.now(clock).plusYears(3);
