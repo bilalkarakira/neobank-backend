@@ -52,6 +52,8 @@ app:
     daily-limit: 5000.00
   history:
     export-max-rows: 10000
+  catch-up:
+    enabled: true         # run interest and due standing orders once at startup, so downtime does not delay them
   recurring:
     scheduler-enabled: true
     cron: "0 5 * * * *"   # hourly at :05 UTC; a missed run is picked up by the next pass
