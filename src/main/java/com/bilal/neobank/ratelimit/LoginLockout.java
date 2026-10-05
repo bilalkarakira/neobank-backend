@@ -52,9 +52,15 @@ public class LoginLockout {
                 });
     }
 
-    public void recordFailure(String normalizedEmail) {
+    /** How long a lock lasts. */
+    public Duration lockDuration() {
+        return settings.lockDuration();
+    }
+
+    /** @return true when THIS failure is the one that locked the address (exactly once per lock) */
+    public boolean recordFailure(String normalizedEmail) {
         String key = hash(normalizedEmail);
-        ownTransaction.executeWithoutResult(status -> {
+        return Boolean.TRUE.equals(ownTransaction.execute(status -> {
             OffsetDateTime now = now();
             // make sure the row exists, then lock it so parallel failures are counted one after the other
             jdbc.sql("insert into login_failures (email_hash, failures, first_failure_at, updated_at) "
@@ -76,7 +82,9 @@ public class LoginLockout {
                     + "locked_until = :locked, updated_at = :now where email_hash = :key")
                     .param("failures", failures).param("first", first).param("locked", lockedUntil)
                     .param("now", now).param("key", key).update();
-        });
+            boolean wasLocked = state.lockedUntil() != null && state.lockedUntil().isAfter(now);
+            return failures >= settings.maxFailures() && !wasLocked;
+        }));
     }
 
     /** A correct password wipes the slate. */

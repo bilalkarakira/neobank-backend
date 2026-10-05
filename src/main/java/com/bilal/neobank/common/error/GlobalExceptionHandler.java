@@ -15,6 +15,7 @@ import com.bilal.neobank.admin.AdminExceptions;
 import com.bilal.neobank.auth.MissingCsrfHeaderException;
 import com.bilal.neobank.auth.PasswordExceptions;
 import com.bilal.neobank.session.SessionNotFoundException;
+import com.bilal.neobank.notification.NotificationNotFoundException;
 import com.bilal.neobank.ratelimit.RateLimitExceededException;
 import com.bilal.neobank.recurring.RecurringExceptions;
 import com.bilal.neobank.transfer.TransferExceptions;
@@ -166,6 +167,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(SessionNotFoundException.class)
     ProblemDetail handleSessionNotFound(SessionNotFoundException ex) {
         return problem(HttpStatus.NOT_FOUND, "Session not found", ex.getMessage(), "SESSION_NOT_FOUND");
+    }
+
+    @ExceptionHandler(NotificationNotFoundException.class)
+    ProblemDetail handleNotificationNotFound(NotificationNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Notification not found", ex.getMessage(), "NOTIFICATION_NOT_FOUND");
     }
 
     @ExceptionHandler(AdminExceptions.CustomerNotFoundException.class)

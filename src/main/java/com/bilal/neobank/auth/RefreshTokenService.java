@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import com.bilal.neobank.notification.NotificationService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,13 +40,15 @@ public class RefreshTokenService {
     private final UserRepository userRepository;
     private final RefreshProperties properties;
     private final Clock clock;
+    private final NotificationService notifications;
 
     public RefreshTokenService(RefreshTokenRepository repository, UserRepository userRepository,
-            RefreshProperties properties, Clock clock) {
+            RefreshProperties properties, Clock clock, NotificationService notifications) {
         this.repository = repository;
         this.userRepository = userRepository;
         this.properties = properties;
         this.clock = clock;
+        this.notifications = notifications;
     }
 
     /** Starts a new family: one per login. [device] and [ip] describe where it came from, for the session list. */
@@ -53,6 +56,7 @@ public class RefreshTokenService {
     public Issued issueForLogin(User user, String device, String ip) {
         OffsetDateTime now = now();
         OffsetDateTime familyExpires = now.plus(properties.maxLifetime());
+        notifications.loginFrom(user.getId(), device, ip); // before the new login is stored: it compares with the earlier ones
         return insert(user.getId(), UUID.randomUUID(), now, familyExpires, device, ip, now);
     }
 

@@ -4,6 +4,7 @@ import com.bilal.neobank.auth.dto.LoginRequest;
 import com.bilal.neobank.auth.dto.RegisterRequest;
 import com.bilal.neobank.auth.dto.TokenResponse;
 import com.bilal.neobank.auth.dto.UserResponse;
+import com.bilal.neobank.notification.NotificationService;
 import com.bilal.neobank.ratelimit.ClientIp;
 import com.bilal.neobank.ratelimit.LoginLockout;
 import com.bilal.neobank.ratelimit.RateLimitProperties;
@@ -39,9 +40,11 @@ public class AuthController {
     private final RateLimiter rateLimiter;
     private final LoginLockout lockout;
     private final RateLimitProperties limits;
+    private final NotificationService notifications;
 
     public AuthController(AuthService authService, JwtService jwtService, RefreshTokenService refreshTokens,
-            RefreshCookies cookies, RateLimiter rateLimiter, LoginLockout lockout, RateLimitProperties limits) {
+            RefreshCookies cookies, RateLimiter rateLimiter, LoginLockout lockout, RateLimitProperties limits,
+            NotificationService notifications) {
         this.authService = authService;
         this.jwtService = jwtService;
         this.refreshTokens = refreshTokens;
@@ -49,6 +52,7 @@ public class AuthController {
         this.rateLimiter = rateLimiter;
         this.lockout = lockout;
         this.limits = limits;
+        this.notifications = notifications;
     }
 
     @PostMapping("/register")
@@ -72,7 +76,9 @@ public class AuthController {
         try {
             user = authService.authenticate(request);
         } catch (InvalidCredentialsException e) {
-            lockout.recordFailure(email);
+            if (lockout.recordFailure(email)) {
+                notifications.loginLocked(email, lockout.lockDuration());
+            }
             throw e;
         }
         lockout.recordSuccess(email);

@@ -3,6 +3,7 @@ package com.bilal.neobank.auth;
 import com.bilal.neobank.account.AccountNotFoundException;
 import com.bilal.neobank.auth.PasswordExceptions.SamePasswordException;
 import com.bilal.neobank.auth.PasswordExceptions.WrongCurrentPasswordException;
+import com.bilal.neobank.notification.NotificationService;
 import com.bilal.neobank.ratelimit.LoginLockout;
 import com.bilal.neobank.user.User;
 import com.bilal.neobank.user.UserRepository;
@@ -23,13 +24,15 @@ public class PasswordService {
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenService refreshTokens;
     private final LoginLockout lockout;
+    private final NotificationService notifications;
 
     public PasswordService(UserRepository userRepository, PasswordEncoder passwordEncoder,
-            RefreshTokenService refreshTokens, LoginLockout lockout) {
+            RefreshTokenService refreshTokens, LoginLockout lockout, NotificationService notifications) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokens = refreshTokens;
         this.lockout = lockout;
+        this.notifications = notifications;
     }
 
     /**
@@ -44,7 +47,9 @@ public class PasswordService {
         String email = user.getEmail();
         lockout.assertNotLocked(email);
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
-            lockout.recordFailure(email);
+            if (lockout.recordFailure(email)) {
+                notifications.loginLocked(email, lockout.lockDuration());
+            }
             throw new WrongCurrentPasswordException();
         }
         if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
@@ -54,5 +59,6 @@ public class PasswordService {
         userRepository.save(user);
         refreshTokens.revokeAllExcept(userId, keepSessionId);
         lockout.recordSuccess(email);
+        notifications.passwordChanged(userId);
     }
 }
