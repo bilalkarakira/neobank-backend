@@ -50,6 +50,9 @@ public final class NetworkConfig {
     public BigDecimal interchangeRate = new BigDecimal("0.0120");
     public BigDecimal schemeFeeRate = new BigDecimal("0.0005");
 
+    /** Days that are not business days besides Saturday and Sunday (CARDNET_HOLIDAYS=2026-12-25,2027-01-01). */
+    public Set<java.time.LocalDate> holidays = Set.of();
+
     public Duration idleTimeout = Duration.ofSeconds(120);
     public int maxConnections = 50;
 
@@ -65,6 +68,14 @@ public final class NetworkConfig {
         String fileKey = System.getenv("CARDNET_FILE_KEY");
         if (fileKey != null && !fileKey.isBlank()) {
             c.fileSecret = fileKey;
+        }
+        String holidays = System.getenv("CARDNET_HOLIDAYS");
+        if (holidays != null && !holidays.isBlank()) {
+            java.util.Set<java.time.LocalDate> parsed = new java.util.HashSet<>();
+            for (String day : holidays.split(",")) {
+                parsed.add(java.time.LocalDate.parse(day.trim()));
+            }
+            c.holidays = Set.copyOf(parsed);
         }
         String routes = System.getenv("CARDNET_ROUTES"); // "999900=127.0.0.1:8583;123456=127.0.0.1:8584"
         if (routes != null && !routes.isBlank()) {

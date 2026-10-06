@@ -47,6 +47,29 @@ public final class ClearingDirs {
         return dir("issuer-out");
     }
 
+    /** Settlement statements (CSV and XML, totals only) written by the network for every participant. */
+    public Path settlementOut() {
+        return dir("settlement-out");
+    }
+
+    /** Writes through a temporary name and renames, so a reader only ever lists finished files. */
+    public static Path writeAtomically(Path directory, String fileName, byte[] bytes) {
+        Path temp = directory.resolve(fileName + ".tmp");
+        Path target = directory.resolve(fileName);
+        try {
+            Files.createDirectories(directory);
+            Files.write(temp, bytes);
+            try {
+                Files.move(temp, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            return target;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     /** "B0001.clr" -> "B0001.ack": the acknowledgement of a file carries its name. */
     public static String ackName(String fileName) {
         return (fileName.endsWith(FILE_SUFFIX) ? fileName.substring(0, fileName.length() - FILE_SUFFIX.length()) : fileName) + ACK_SUFFIX;

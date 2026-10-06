@@ -80,3 +80,13 @@ java -cp "shared/target/shared-0.1.0-SNAPSHOT.jar;iso8583/target/iso8583-0.1.0-S
 ```
 
 It answers every file as posted and posts nothing. Fees (merchant discount 2.00%, interchange 1.20%, scheme fee 0.05% each side) are only worked out and stored in P4; they are posted in P5.
+
+## Settlement and the end-of-day tool
+
+After clearing, the network turns the cleared items of a business day into **one net movement per participant** (SPEC-P5-settlement.md): for each cleared purchase the issuer pays amount - interchange + its scheme fee, the acquirer receives amount - interchange - its scheme fee, the network receives both scheme fees; the three add up to zero, and a refund reverses every sign. The run has a value date (the next business day; weekends and `CARDNET_HOLIDAYS=2026-12-25,...` skipped) and writes, per participant, a CSV and a camt.053-STYLE XML statement into `settlement-out/` of the clearing folder (totals only, readable on purpose, not encrypted, not schema-validated: a simulation).
+
+```
+POST http://127.0.0.1:9100/settlement/run[?date=2026-10-06]    one run (the oldest unsettled day when no date)
+GET  http://127.0.0.1:9100/settlements                          the latest runs
+java tools/Eod.java [--pos http://127.0.0.1:9000] [--net http://127.0.0.1:9100]   close the day, wait, settle, print the figures
+```

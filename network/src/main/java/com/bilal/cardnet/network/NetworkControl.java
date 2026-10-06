@@ -24,12 +24,15 @@ public final class NetworkControl {
     private final int wantedPort;
     private final Supplier<Map<String, Object>> status;
     private final Chaos chaos;
+    private final SettlementService settlement;
     private HttpServer server;
 
-    public NetworkControl(int port, Supplier<Map<String, Object>> status, Chaos chaos) {
+    /** @param settlement the settlement service, or null when settlement is not available (clearing off) */
+    public NetworkControl(int port, Supplier<Map<String, Object>> status, Chaos chaos, SettlementService settlement) {
         this.wantedPort = port;
         this.status = status;
         this.chaos = chaos;
+        this.settlement = settlement;
     }
 
     public synchronized void start() throws IOException {
@@ -54,7 +57,70 @@ public final class NetworkControl {
                 reply(exchange, 400, Json.write(error(e.getMessage())));
             }
         });
+        server.createContext("/settlement/run", exchange -> {
+            if (!exchange.getRequestMethod().equals("POST")) {
+                reply(exchange, 405, Json.write(error("use POST")));
+                return;
+            }
+            if (settlement == null) {
+                reply(exchange, 409, Json.write(error("settlement is switched off: no clearing folder is configured")));
+                return;
+            }
+            try {
+                java.time.LocalDate date = null;
+                String query = exchange.getRequestURI().getQuery();
+                if (query != null && query.startsWith("date=")) {
+                    date = java.time.LocalDate.parse(query.substring("date=".length()));
+                }
+                java.util.Optional<SettlementService.Run> run = settlement.run(date);
+                Map<String, Object> body = Json.object();
+                body.put("settled", run.isPresent());
+                body.put("message", run.isPresent() ? "Settled " + run.get().itemCount() + " item(s) of " + run.get().businessDate()
+                        + " as run " + run.get().runNumber() + ", value date " + run.get().valueDate() + "." : "Nothing to settle.");
+                run.ifPresent(r -> body.put("run", runMap(r)));
+                reply(exchange, 200, Json.write(body));
+            } catch (java.time.format.DateTimeParseException e) {
+                reply(exchange, 400, Json.write(error("the date must look like 2026-10-06")));
+            }
+        });
+        server.createContext("/settlements", exchange -> {
+            if (!exchange.getRequestMethod().equals("GET")) {
+                reply(exchange, 405, Json.write(error("use GET")));
+                return;
+            }
+            Map<String, Object> body = Json.object();
+            java.util.List<Object> runs = Json.list();
+            if (settlement != null) {
+                settlement.recentRuns(20).forEach(r -> runs.add(runMap(r)));
+                body.put("unsettledItems", settlement.unsettledItems());
+            }
+            body.put("runs", runs);
+            reply(exchange, 200, Json.write(body));
+        });
         server.start();
+    }
+
+    private static Map<String, Object> runMap(SettlementService.Run run) {
+        Map<String, Object> map = Json.object();
+        map.put("runNumber", run.runNumber());
+        map.put("businessDate", run.businessDate().toString());
+        map.put("valueDate", run.valueDate().toString());
+        map.put("itemCount", run.itemCount());
+        java.util.List<Object> lines = Json.list();
+        for (SettlementFiles.Line line : run.lines()) {
+            Map<String, Object> l = Json.object();
+            l.put("participant", line.participant());
+            l.put("role", line.role());
+            l.put("purchases", line.purchases());
+            l.put("refunds", line.refunds());
+            l.put("interchange", line.interchange());
+            l.put("schemeFee", line.schemeFee());
+            l.put("net", line.net());
+            l.put("items", line.items());
+            lines.add(l);
+        }
+        map.put("lines", lines);
+        return map;
     }
 
     public synchronized void stop() {

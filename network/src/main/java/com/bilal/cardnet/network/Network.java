@@ -29,6 +29,7 @@ public final class Network implements AutoCloseable {
     private final NetworkServer server;
     private final NetworkControl control;
     private final ClearingProcessor clearing;
+    private final SettlementService settlement;
     private final com.bilal.cardnet.shared.PeriodicTask clearingTask;
 
     private Network(NetworkConfig config, DataSource ds, PanVault vault, Clock clock) {
@@ -44,9 +45,13 @@ public final class Network implements AutoCloseable {
                 reversalWorker::wake);
         this.delivery = new AdviceDelivery(advices, link, config.issuerTimeout, config.adviceInterval, clock);
         this.server = new NetworkServer(config, router, chaos);
-        this.control = new NetworkControl(config.controlPort, this::status, chaos);
         this.clearing = config.clearingDir == null ? null : new ClearingProcessor(config, ds, vault, clock);
-        this.clearingTask = clearing == null ? null : new com.bilal.cardnet.shared.PeriodicTask("network-clearing", clearing::tick);
+        this.settlement = config.clearingDir == null ? null : new SettlementService(config, ds, clock);
+        this.control = new NetworkControl(config.controlPort, this::status, chaos, settlement);
+        this.clearingTask = clearing == null ? null : new com.bilal.cardnet.shared.PeriodicTask("network-clearing", () -> {
+            clearing.tick();
+            settlement.writePending();
+        });
     }
 
     /** Starts every part. The database must already be migrated. */
@@ -81,6 +86,7 @@ public final class Network implements AutoCloseable {
         map.put("counters", router.counters());
         if (clearing != null) {
             map.put("clearingFilesWaiting", clearing.waiting());
+            map.put("unsettledItems", settlement.unsettledItems());
         }
         map.put("chaos", chaos.toMap());
         return map;
@@ -117,6 +123,11 @@ public final class Network implements AutoCloseable {
     /** The clearing processor, or null when clearing is switched off (no clearing folder configured). */
     public ClearingProcessor clearing() {
         return clearing;
+    }
+
+    /** The settlement service, or null when clearing is switched off. */
+    public SettlementService settlement() {
+        return settlement;
     }
 
     public NetworkServer server() {
