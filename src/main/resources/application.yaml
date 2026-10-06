@@ -71,6 +71,13 @@ app:
       port: 8583
       max-connections: 50
       idle-timeout: 120s
+    clearing:                     # files from the card network: this bank reads issuer-in/ and answers in issuer-out/
+      enabled: true
+      dir: ${CARDNET_DATA_DIR:./data/clearing}   # the folder shared with the network and the acquirer
+      issuer-id: "999900"         # the receiver in the header of the files meant for this bank (the test BIN)
+      network-name: NET
+      file-secret: ${CARDNET_FILE_KEY:neobank-dev-clearing-key-change-me}   # DEV default: the same text in every process
+      poll: 5s
   catch-up:
     enabled: true         # run interest and due standing orders once at startup, so downtime does not delay them
   recurring:

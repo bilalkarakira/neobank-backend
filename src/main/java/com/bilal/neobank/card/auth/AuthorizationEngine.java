@@ -9,6 +9,7 @@ import com.bilal.neobank.card.CardProperties;
 import com.bilal.neobank.card.CardRepository;
 import com.bilal.neobank.card.CardStatus;
 import com.bilal.neobank.card.FreezeReason;
+import com.bilal.neobank.card.clearing.CardReceivables;
 import com.bilal.neobank.card.Luhn;
 import com.bilal.neobank.notification.NotificationService;
 import jakarta.persistence.EntityManager;
@@ -66,10 +67,12 @@ public class AuthorizationEngine {
     private final NotificationService notifications;
     private final EntityManager entityManager;
     private final Clock clock;
+    private final CardReceivables receivables;
 
     public AuthorizationEngine(CardRepository cardRepository, AuthorizationRepository authorizationRepository,
             HoldService holdService, CardCrypto crypto, CardProperties properties,
-            NotificationService notifications, EntityManager entityManager, Clock clock) {
+            NotificationService notifications, EntityManager entityManager, Clock clock, CardReceivables receivables) {
+        this.receivables = receivables;
         this.cardRepository = cardRepository;
         this.authorizationRepository = authorizationRepository;
         this.holdService = holdService;
@@ -137,6 +140,10 @@ public class AuthorizationEngine {
         }
         // 6. the account behind the card
         if (account.getStatus() != AccountStatus.ACTIVE) {
+            return decline(card, account, panHash, last4, r, ResponseCode.DO_NOT_HONOUR, now);
+        }
+        // 6b. the customer owes the bank money from an earlier cleared payment: no new card payments until it is paid off
+        if (receivables.hasOutstanding(account.getId())) {
             return decline(card, account, panHash, last4, r, ResponseCode.DO_NOT_HONOUR, now);
         }
         // 7. what the card may do: purchases (processing code 00) in USD, not at blocked merchant categories

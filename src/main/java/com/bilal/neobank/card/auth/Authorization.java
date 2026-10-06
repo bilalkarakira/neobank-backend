@@ -106,6 +106,17 @@ public class Authorization {
     @Column(name = "via_stand_in", nullable = false)
     private boolean viaStandIn;
 
+    /** What was actually cleared (may differ from {@code amount}: a tip), once the payment is CAPTURED. */
+    @Column(name = "captured_amount", precision = 19, scale = 2)
+    private BigDecimal capturedAmount;
+
+    @Column(name = "captured_at")
+    private Instant capturedAt;
+
+    /** Cleared although this bank never authorized it: the shop was paid by its bank, so the presentment was honoured. */
+    @Column(nullable = false)
+    private boolean forced;
+
     protected Authorization() {
         // required by JPA
     }
@@ -181,6 +192,24 @@ public class Authorization {
         this.viaStandIn = true;
     }
 
+    /** Clearing: the real amount is posted, so the hold is over (it stops reserving money the moment the status changes). */
+    public void capture(BigDecimal finalAmount, Instant now) {
+        this.status = AuthorizationStatus.CAPTURED;
+        this.capturedAmount = finalAmount;
+        this.capturedAt = now.truncatedTo(ChronoUnit.MICROS);
+        this.releasedAt = this.capturedAt;
+    }
+
+    /** A cleared payment with no authorization behind it: recorded as captured at once and flagged. */
+    public static Authorization forcedCapture(UUID cardId, UUID accountId, String panHash, String last4, Request request,
+            String authCode, BigDecimal finalAmount, Instant now) {
+        Authorization a = new Authorization(cardId, accountId, panHash, last4, request, ResponseCode.APPROVED, authCode,
+                AuthorizationStatus.AUTHORIZED, now, null);
+        a.forced = true;
+        a.capture(finalAmount, now);
+        return a;
+    }
+
     public void reverse(Instant now) {
         this.status = AuthorizationStatus.REVERSED;
         this.releasedAt = now.truncatedTo(ChronoUnit.MICROS);
@@ -217,4 +246,7 @@ public class Authorization {
     public Instant getExpiresAt() { return expiresAt; }
     public Instant getReleasedAt() { return releasedAt; }
     public boolean isViaStandIn() { return viaStandIn; }
+    public BigDecimal getCapturedAmount() { return capturedAmount; }
+    public Instant getCapturedAt() { return capturedAt; }
+    public boolean isForced() { return forced; }
 }

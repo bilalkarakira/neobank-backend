@@ -97,8 +97,16 @@ public class HistoryService {
 
     private static Counterparty counterparty(HistoryRow row, UUID userId) {
         if (row.counterpartyType() == AccountType.SYSTEM) {
-            // the bank itself: either paying interest or handing out (simulated) cash
-            return new Counterparty(row.type() == TransactionType.INTEREST ? "Interest earned" : "Cash deposit", null, false);
+            // the bank itself: paying interest, handing out (simulated) cash, or settling a card payment
+            String label = switch (row.type()) {
+                case INTEREST -> "Interest earned";
+                case CARD_PURCHASE -> "Card payment";
+                case CARD_REFUND -> "Card refund";
+                case CARD_COLLECTION -> "Card payment repaid";
+                case CARD_SHORTFALL -> "Card payment";
+                default -> "Cash deposit";
+            };
+            return new Counterparty(label, null, false);
         }
         if (userId.equals(row.counterpartyUserId())) {
             String label = row.counterpartyNickname() != null ? row.counterpartyNickname()

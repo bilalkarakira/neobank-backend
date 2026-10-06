@@ -70,6 +70,14 @@ public class NotificationService {
                         .formatted(last4, WHEN.format(now())));
     }
 
+    /** A cleared card payment that was more than the account could cover: the rest is owed to the bank. */
+    @Transactional
+    public void cardShortfall(UUID userId, String merchant, String paid, String owed) {
+        insert(userId, "CARD_SHORTFALL", "You owe the bank money from a card payment",
+                "A card payment at %s cleared on %s for more than you had available. %s was taken from your account and %s is owed to the bank. It is paid off by your next deposit or refund, and card payments are declined until then."
+                        .formatted(merchant, WHEN.format(now()), paid, owed));
+    }
+
     @Transactional
     public void passwordChanged(UUID userId) {
         insert(userId, "PASSWORD_CHANGED", "Your password was changed",
