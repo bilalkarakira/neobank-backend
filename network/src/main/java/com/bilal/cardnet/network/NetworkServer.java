@@ -45,9 +45,14 @@ public final class NetworkServer {
         this.chaos = chaos;
     }
 
+    /** The address the acquirer port is bound to. */
+    public synchronized InetAddress boundAddress() {
+        return server.getInetAddress();
+    }
+
     public synchronized void start() throws IOException {
         capacity = new Semaphore(config.maxConnections);
-        server = new ServerSocket(config.acquirerPort, 50, InetAddress.getLoopbackAddress());
+        server = new ServerSocket(config.acquirerPort, 50, InetAddress.getByName(config.bindAddress));
         Thread.ofVirtual().name("network-accept").start(this::acceptLoop);
         LOG.log(System.Logger.Level.INFO, "Network listening for acquirers on 127.0.0.1:{0}", server.getLocalPort());
     }

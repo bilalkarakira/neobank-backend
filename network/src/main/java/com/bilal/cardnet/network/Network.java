@@ -47,7 +47,7 @@ public final class Network implements AutoCloseable {
         this.server = new NetworkServer(config, router, chaos);
         this.clearing = config.clearingDir == null ? null : new ClearingProcessor(config, ds, vault, clock);
         this.settlement = config.clearingDir == null ? null : new SettlementService(config, ds, clock);
-        this.control = new NetworkControl(config.controlPort, this::status, chaos, settlement);
+        this.control = new NetworkControl(config.bindAddress, config.controlPort, this::status, chaos, settlement);
         this.clearingTask = clearing == null ? null : new com.bilal.cardnet.shared.PeriodicTask("network-clearing", () -> {
             clearing.tick();
             settlement.writePending();
@@ -128,6 +128,10 @@ public final class Network implements AutoCloseable {
     /** The settlement service, or null when clearing is switched off. */
     public SettlementService settlement() {
         return settlement;
+    }
+
+    public NetworkControl control() {
+        return control;
     }
 
     public NetworkServer server() {

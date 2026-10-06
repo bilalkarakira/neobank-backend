@@ -47,6 +47,11 @@ public final class Acquirer implements AutoCloseable {
         return clearing;
     }
 
+    /** The address the POS console is bound to. */
+    public java.net.InetAddress consoleBoundAddress() {
+        return console.boundAddress();
+    }
+
     public int consolePort() {
         return console.port();
     }

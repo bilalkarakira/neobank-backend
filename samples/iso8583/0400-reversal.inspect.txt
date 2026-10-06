@@ -1,0 +1,14 @@
+MTI 0400  (ISO 8583:1987, Reversal, Request, Acquirer)
+Data elements present: [2, 3, 4, 7, 11, 12, 13, 37, 41, 42, 49, 90]
+  DE   2  Primary account number               999900******0012
+  DE   3  Processing code                      000000
+  DE   4  Amount, transaction                  000000002500
+  DE   7  Transmission date and time           1006120500
+  DE  11  System trace audit number            000102
+  DE  12  Local transaction time               120500
+  DE  13  Local transaction date               1006
+  DE  37  Retrieval reference number           000000000101
+  DE  41  Card acceptor terminal id            TERM0001
+  DE  42  Card acceptor id                     MERCHANT0000001
+  DE  49  Currency code, transaction           840
+  DE  90  Original data elements               010000010110061200000000012345600000000000

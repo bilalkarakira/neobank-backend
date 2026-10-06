@@ -1,0 +1,19 @@
+MTI 0100  (ISO 8583:1987, Authorization, Request, Acquirer)
+Data elements present: [2, 3, 4, 7, 11, 12, 13, 14, 18, 22, 25, 32, 37, 41, 42, 43, 49]
+  DE   2  Primary account number               999900******0012
+  DE   3  Processing code                      000000
+  DE   4  Amount, transaction                  000000002500
+  DE   7  Transmission date and time           1006120000
+  DE  11  System trace audit number            000101
+  DE  12  Local transaction time               120000
+  DE  13  Local transaction date               1006
+  DE  14  Expiration date                      2910
+  DE  18  Merchant category code               5814
+  DE  22  POS entry mode                       051
+  DE  25  POS condition code                   00
+  DE  32  Acquiring institution id             123456
+  DE  37  Retrieval reference number           000000000101
+  DE  41  Card acceptor terminal id            TERM0001
+  DE  42  Card acceptor id                     MERCHANT0000001
+  DE  43  Card acceptor name/location          Corner Cafe                             
+  DE  49  Currency code, transaction           840

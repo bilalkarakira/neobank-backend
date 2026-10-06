@@ -25,6 +25,8 @@ public final class AcquirerConfig {
     /** 1.0 is the real schedule (1, 2, 4, 8, 16 s, then 60 s); tests shrink it. */
     public double retryScale = 1.0;
 
+    /** The address the POS console binds to: loopback unless CARDNET_BIND says otherwise (containers need 0.0.0.0). */
+    public String bindAddress = "127.0.0.1";
     public int httpPort = 9000;
 
     // ---- clearing (P4) ----
@@ -45,16 +47,27 @@ public final class AcquirerConfig {
             new Merchant("MERCHANT0000003", "Electronics Store", "5732"),
             new Merchant("MERCHANT0000004", "Casino Royale", "7995"));
 
-    /** The published demo card of NeoBank's demo data (a test number, not a secret). The expiry is what the Cards page shows. */
+    /**
+     * The published demo card of NeoBank's demo data (a test number, not a secret). NeoBank issues a card that expires three years
+     * from the month it was issued, so by default the expiry here is three years from now, as MM/YY; CARDNET_DEMO_CARD_EXPIRY
+     * overrides it (for a demo database seeded in another month).
+     */
     public String demoCardPan = "9999000000000012";
     public String demoCardPin = "4321";
-    public String demoCardExpiry = "10/29";
+    public String demoCardExpiry = threeYearsAhead();
+
+    /** The expiry NeoBank gives a card issued this month: three years ahead, written MM/YY as it is printed on the card. */
+    public static String threeYearsAhead() {
+        java.time.YearMonth expiry = java.time.YearMonth.now(java.time.ZoneOffset.UTC).plusYears(3);
+        return "%02d/%02d".formatted(expiry.getMonthValue(), expiry.getYear() % 100);
+    }
 
     public static AcquirerConfig fromEnvironment() {
         AcquirerConfig c = new AcquirerConfig();
         c.networkHost = env("CARDNET_NETWORK_HOST", c.networkHost);
         c.networkPort = Integer.parseInt(env("CARDNET_NETWORK_PORT", String.valueOf(c.networkPort)));
         c.networkControlUrl = env("CARDNET_NETWORK_CONTROL_URL", c.networkControlUrl);
+        c.bindAddress = env("CARDNET_BIND", c.bindAddress);
         c.httpPort = Integer.parseInt(env("CARDNET_HTTP_PORT", String.valueOf(c.httpPort)));
         c.networkTimeout = Duration.ofMillis(Long.parseLong(env("CARDNET_ACQUIRER_TIMEOUT_MS", String.valueOf(c.networkTimeout.toMillis()))));
         String dataDir = System.getenv("CARDNET_DATA_DIR");

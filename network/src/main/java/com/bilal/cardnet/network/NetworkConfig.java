@@ -13,6 +13,8 @@ public final class NetworkConfig {
     public record Route(String prefix, String host, int port) {
     }
 
+    /** The address the acquirer port and the control API bind to: loopback unless CARDNET_BIND says otherwise (containers need 0.0.0.0). */
+    public String bindAddress = "127.0.0.1";
     public int acquirerPort = 8601;
     public int controlPort = 9100;
     public List<Route> routes = List.of(new Route("999900", "127.0.0.1", 8583));
@@ -59,6 +61,10 @@ public final class NetworkConfig {
     /** Reads CARDNET_* environment variables over the defaults. */
     public static NetworkConfig fromEnvironment() {
         NetworkConfig c = new NetworkConfig();
+        String bind = System.getenv("CARDNET_BIND");
+        if (bind != null && !bind.isBlank()) {
+            c.bindAddress = bind.trim();
+        }
         c.acquirerPort = intEnv("CARDNET_ACQUIRER_PORT", c.acquirerPort);
         c.controlPort = intEnv("CARDNET_CONTROL_PORT", c.controlPort);
         c.issuerTimeout = Duration.ofMillis(intEnv("CARDNET_ISSUER_TIMEOUT_MS", (int) c.issuerTimeout.toMillis()));

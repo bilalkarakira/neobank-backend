@@ -57,7 +57,7 @@ public final class PosConsole {
     }
 
     public synchronized void start() throws IOException {
-        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), config.httpPort), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getByName(config.bindAddress), config.httpPort), 0);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.createContext("/", exchange -> route(exchange));
         server.start();
@@ -72,6 +72,11 @@ public final class PosConsole {
 
     public int port() {
         return server == null ? -1 : server.getAddress().getPort();
+    }
+
+    /** The address the console is bound to. */
+    public InetAddress boundAddress() {
+        return server.getAddress().getAddress();
     }
 
     // ---- routing ----

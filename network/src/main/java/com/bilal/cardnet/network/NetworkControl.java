@@ -21,6 +21,7 @@ public final class NetworkControl {
 
     private static final int MAX_BODY = 4096;
 
+    private final String bindAddress;
     private final int wantedPort;
     private final Supplier<Map<String, Object>> status;
     private final Chaos chaos;
@@ -28,7 +29,8 @@ public final class NetworkControl {
     private HttpServer server;
 
     /** @param settlement the settlement service, or null when settlement is not available (clearing off) */
-    public NetworkControl(int port, Supplier<Map<String, Object>> status, Chaos chaos, SettlementService settlement) {
+    public NetworkControl(String bindAddress, int port, Supplier<Map<String, Object>> status, Chaos chaos, SettlementService settlement) {
+        this.bindAddress = bindAddress;
         this.wantedPort = port;
         this.status = status;
         this.chaos = chaos;
@@ -36,7 +38,7 @@ public final class NetworkControl {
     }
 
     public synchronized void start() throws IOException {
-        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), wantedPort), 0);
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getByName(bindAddress), wantedPort), 0);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.createContext("/status", exchange -> {
             if (!exchange.getRequestMethod().equals("GET")) {
@@ -127,6 +129,11 @@ public final class NetworkControl {
         if (server != null) {
             server.stop(0);
         }
+    }
+
+    /** The address the API is bound to. */
+    public InetAddress boundAddress() {
+        return server.getAddress().getAddress();
     }
 
     public int port() {

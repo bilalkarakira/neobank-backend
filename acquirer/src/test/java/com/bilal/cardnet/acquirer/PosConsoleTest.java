@@ -51,7 +51,7 @@ class PosConsoleTest {
         try (AcqHarness h = new AcqHarness()) {
             String body = get(h, "/api/config").body();
 
-            assertThat(body).contains("Corner Cafe").contains("Casino Royale").contains("\"mcc\":\"7995\"").contains("\"expiry\":\"10/29\"")
+            assertThat(body).contains("Corner Cafe").contains("Casino Royale").contains("\"mcc\":\"7995\"").contains("\"expiry\":\"" + threeYearsFromNow() + "\"")
                     .contains("\"acquirerId\":\"123456\"").contains("\"terminalId\":\"TERM0001\"");
         }
     }
@@ -195,5 +195,22 @@ class PosConsoleTest {
                 }
             });
         }
+    }
+
+    @Test
+    void theConsoleIsLoopbackOnlyUnlessTheBindAddressIsChanged() throws Exception {
+        try (AcqHarness h = new AcqHarness()) {
+            assertThat(h.config.bindAddress).isEqualTo("127.0.0.1");
+            assertThat(h.acquirer.consoleBoundAddress().isLoopbackAddress()).isTrue();
+        }
+        try (AcqHarness h = new AcqHarness(c -> c.bindAddress = "0.0.0.0")) {
+            assertThat(h.acquirer.consoleBoundAddress().isAnyLocalAddress()).isTrue();
+        }
+    }
+
+    /** NeoBank gives a card an expiry three years from the month it is issued: written here independently of the code under test. */
+    private static String threeYearsFromNow() {
+        java.time.LocalDate now = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        return String.format("%02d/%02d", now.getMonthValue(), (now.getYear() + 3) % 100);
     }
 }
