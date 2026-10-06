@@ -25,7 +25,17 @@ public final class AcquirerStore {
 
     /** A payment as the console lists it. */
     public record Row(UUID id, Instant createdAt, String stan, String rrn, String merchantName, String maskedPan, BigDecimal amount,
-            String status, String responseCode, String authCode, String reason, boolean timedOut, boolean pinUsed) {
+            String status, String responseCode, String authCode, String reason, boolean timedOut, boolean pinUsed,
+            String kind, BigDecimal finalAmount, UUID batchId, UUID refundOf) {
+
+        /** What will clear: the final amount when there is one (a tip), else the authorized amount. */
+        public BigDecimal clearingAmount() {
+            return finalAmount != null ? finalAmount : amount;
+        }
+
+        public boolean isRefund() {
+            return "REFUND".equals(kind);
+        }
     }
 
     private final DataSource ds;
@@ -92,12 +102,51 @@ public final class AcquirerStore {
         return query("select * from acq_transactions order by created_at desc, id desc limit ?", limit);
     }
 
+    /** The latest PAYMENT (a refund is not something a terminal can send again). */
     public Optional<Row> latest() {
-        List<Row> rows = recent(1);
+        List<Row> rows = query("select * from acq_transactions where kind = 'PURCHASE' order by created_at desc, id desc limit 1");
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 
-    /** The stored request of a payment, without PIN data. */
+    /**
+     * Sets the amount that will clear for an approved payment that is not in a batch yet.
+     * @return whether it was changed (false: not approved any more, already batched, or not a purchase)
+     */
+    public boolean adjust(UUID id, BigDecimal finalAmount, Instant now) {
+        return exec("update acq_transactions set final_amount = ?, updated_at = ? where id = ? and status = 'APPROVED' and kind = 'PURCHASE' and batch_id is null",
+                finalAmount, Timestamp.from(now), id) == 1;
+    }
+
+    /** Records a refund (the presentment it will clear as) on {@code c}, inside the caller's transaction. */
+    public void insertRefund(Connection c, UUID id, UUID refundOf, Message presentment, String merchantName, BigDecimal amount, Instant now)
+            throws SQLException {
+        String sql = """
+                insert into acq_transactions (id, created_at, updated_at, stan, rrn, terminal_id, merchant_id, merchant_name, mcc, masked_pan,
+                                              last4, amount, currency, de7, pin_used, status, kind, refund_of, request_ciphertext)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, 'REFUND_DUE', 'REFUND', ?, ?)
+                """;
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setObject(1, id);
+            ps.setTimestamp(2, Timestamp.from(now));
+            ps.setTimestamp(3, Timestamp.from(now));
+            ps.setString(4, presentment.get(11));
+            ps.setString(5, presentment.get(37));
+            ps.setString(6, presentment.get(41).strip());
+            ps.setString(7, presentment.get(42).strip());
+            ps.setString(8, merchantName);
+            ps.setString(9, presentment.get(18));
+            ps.setString(10, Pans.mask(presentment.get(2)));
+            ps.setString(11, Pans.last4(presentment.get(2)));
+            ps.setBigDecimal(12, amount);
+            ps.setString(13, presentment.get(49));
+            ps.setString(14, presentment.get(7));
+            ps.setObject(15, refundOf);
+            ps.setBytes(16, vault.encrypt(packager.pack(presentment), id.toString()));
+            ps.executeUpdate();
+        }
+    }
+
+    /** The stored request of a payment, without PIN data (for a refund: the presentment it clears as). */
     public Message request(UUID id) {
         try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement("select request_ciphertext from acq_transactions where id = ?")) {
             ps.setObject(1, id);
@@ -123,7 +172,8 @@ public final class AcquirerStore {
                     rows.add(new Row(rs.getObject("id", UUID.class), rs.getTimestamp("created_at").toInstant(), rs.getString("stan"),
                             rs.getString("rrn"), rs.getString("merchant_name"), rs.getString("masked_pan"), rs.getBigDecimal("amount"),
                             rs.getString("status"), rs.getString("response_code"), rs.getString("auth_code"), rs.getString("reason"),
-                            rs.getBoolean("timed_out"), rs.getBoolean("pin_used")));
+                            rs.getBoolean("timed_out"), rs.getBoolean("pin_used"), rs.getString("kind"), rs.getBigDecimal("final_amount"),
+                            rs.getObject("batch_id", UUID.class), rs.getObject("refund_of", UUID.class)));
                 }
             }
         } catch (SQLException e) {

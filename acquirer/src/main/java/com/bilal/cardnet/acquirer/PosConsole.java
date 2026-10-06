@@ -30,6 +30,10 @@ import java.util.concurrent.Executors;
  * POST /api/pay               {pan, expiry, amount, merchantId, pin?}
  * POST /api/resend            send the latest payment again (a duplicate)
  * POST /api/void              {id}
+ * POST /api/adjust            {id, amount}  the final amount of an approved payment (a tip)
+ * POST /api/refund            {id, amount}  refund all or part of a cleared payment
+ * POST /api/close-day         put every approved payment and due refund into one clearing file
+ * GET  /api/batches           the clearing files and their status
  * GET  /api/transactions      the latest payments
  * GET  /api/network           the network's status (proxied)
  * POST /api/network/chaos     the network's chaos switches (proxied)
@@ -42,12 +46,14 @@ public final class PosConsole {
 
     private final AcquirerConfig config;
     private final AcquirerService service;
+    private final AcquirerClearing clearing;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
     private HttpServer server;
 
-    public PosConsole(AcquirerConfig config, AcquirerService service) {
+    public PosConsole(AcquirerConfig config, AcquirerService service, AcquirerClearing clearing) {
         this.config = config;
         this.service = service;
+        this.clearing = clearing;
     }
 
     public synchronized void start() throws IOException {
@@ -81,6 +87,10 @@ public final class PosConsole {
                 case "/api/pay" -> only(exchange, method, "POST", () -> json(exchange, 200, pay(Json.parseFlat(body(exchange)))));
                 case "/api/resend" -> only(exchange, method, "POST", () -> json(exchange, 200, resultMap(service.resendLast())));
                 case "/api/void" -> only(exchange, method, "POST", () -> json(exchange, 200, voidSale(Json.parseFlat(body(exchange)))));
+                case "/api/adjust" -> only(exchange, method, "POST", () -> json(exchange, 200, adjust(Json.parseFlat(body(exchange)))));
+                case "/api/refund" -> only(exchange, method, "POST", () -> json(exchange, 200, refund(Json.parseFlat(body(exchange)))));
+                case "/api/close-day" -> only(exchange, method, "POST", () -> json(exchange, 200, closeDay()));
+                case "/api/batches" -> only(exchange, method, "GET", () -> json(exchange, 200, batches()));
                 case "/api/network" -> only(exchange, method, "GET", () -> proxy(exchange, "GET", "/status", null));
                 case "/api/network/chaos" -> only(exchange, method, "POST", () -> proxy(exchange, "POST", "/chaos", body(exchange)));
                 default -> json(exchange, 404, error("not found"));
@@ -146,6 +156,8 @@ public final class PosConsole {
         demo.put("pin", config.demoCardPin);
         demo.put("expiry", config.demoCardExpiry);
         map.put("demoCard", demo);
+        map.put("clearing", clearing.enabled());
+        map.put("tipLimitPercent", config.tipLimit.movePointRight(2).stripTrailingZeros().toPlainString());
         map.put("acquirerId", config.acquirerId);
         map.put("terminalId", config.terminalId);
         return map;
@@ -167,24 +179,86 @@ public final class PosConsole {
         return resultMap(service.voidSale(id));
     }
 
+    private static UUID id(Map<String, Object> in) {
+        try {
+            return UUID.fromString(String.valueOf(in.get("id")));
+        } catch (IllegalArgumentException e) {
+            throw new AcquirerService.BadRequestException("That is not a payment id.");
+        }
+    }
+
+    private Map<String, Object> adjust(Map<String, Object> in) {
+        return rowMap(clearing.adjust(id(in), text(in, "amount")));
+    }
+
+    private Map<String, Object> refund(Map<String, Object> in) {
+        return rowMap(clearing.refund(id(in), text(in, "amount")));
+    }
+
+    private Map<String, Object> closeDay() {
+        Map<String, Object> map = Json.object();
+        java.util.Optional<AcquirerClearing.BatchResult> batch = clearing.closeDay();
+        if (batch.isEmpty()) {
+            map.put("batch", null);
+            map.put("message", "Nothing to send: no approved payment or refund is waiting.");
+            return map;
+        }
+        Map<String, Object> b = new LinkedHashMap<>();
+        b.put("id", batch.get().id().toString());
+        b.put("fileId", batch.get().fileId());
+        b.put("fileName", batch.get().fileName());
+        b.put("count", batch.get().count());
+        b.put("controlTotal", batch.get().controlTotal());
+        map.put("batch", b);
+        map.put("message", "Sent " + batch.get().count() + " item(s) to the network in file " + batch.get().fileName() + ".");
+        return map;
+    }
+
+    private Map<String, Object> batches() {
+        Map<String, Object> map = Json.object();
+        List<Object> rows = Json.list();
+        for (AcquirerClearing.BatchRow b : clearing.batches(10)) {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("id", b.id().toString());
+            r.put("fileId", b.fileId());
+            r.put("fileName", b.fileName());
+            r.put("businessDate", b.businessDate().toString());
+            r.put("count", b.count());
+            r.put("controlTotal", java.math.BigDecimal.valueOf(b.controlTotal(), 2).toPlainString());
+            r.put("status", b.status());
+            r.put("createdAt", b.createdAt().toString());
+            r.put("ackReason", b.ackReason());
+            rows.add(r);
+        }
+        map.put("batches", rows);
+        return map;
+    }
+
+    private static Map<String, Object> rowMap(AcquirerStore.Row row) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("id", row.id().toString());
+        r.put("createdAt", row.createdAt().toString());
+        r.put("merchant", row.merchantName());
+        r.put("card", row.maskedPan());
+        r.put("amount", row.amount().setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
+        r.put("finalAmount", row.finalAmount() == null ? null : row.finalAmount().setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
+        r.put("kind", row.kind());
+        r.put("refundOf", row.refundOf() == null ? null : row.refundOf().toString());
+        r.put("status", row.status());
+        r.put("responseCode", row.responseCode());
+        r.put("authCode", row.authCode());
+        r.put("reason", row.reason());
+        r.put("timedOut", row.timedOut());
+        r.put("stan", row.stan());
+        r.put("rrn", row.rrn());
+        return r;
+    }
+
     private Map<String, Object> transactions() {
         Map<String, Object> map = Json.object();
         List<Object> rows = Json.list();
         for (AcquirerStore.Row row : service.store().recent(20)) {
-            Map<String, Object> r = new LinkedHashMap<>();
-            r.put("id", row.id().toString());
-            r.put("createdAt", row.createdAt().toString());
-            r.put("merchant", row.merchantName());
-            r.put("card", row.maskedPan());
-            r.put("amount", row.amount().setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
-            r.put("status", row.status());
-            r.put("responseCode", row.responseCode());
-            r.put("authCode", row.authCode());
-            r.put("reason", row.reason());
-            r.put("timedOut", row.timedOut());
-            r.put("stan", row.stan());
-            r.put("rrn", row.rrn());
-            rows.add(r);
+            rows.add(rowMap(row));
         }
         map.put("transactions", rows);
         return map;

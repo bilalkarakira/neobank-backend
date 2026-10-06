@@ -27,6 +27,18 @@ public final class AcquirerConfig {
 
     public int httpPort = 9000;
 
+    // ---- clearing (P4) ----
+
+    /** The folder shared with the network (see ClearingDirs). Null switches clearing off (the default in tests). */
+    public java.nio.file.Path clearingDir = null;
+    public Duration clearingPoll = Duration.ofSeconds(2);
+    /** The text the file key is made from; the same in every process that reads or writes clearing files. */
+    public String fileSecret = com.bilal.cardnet.iso8583.clearing.ClearingFileCodec.DEFAULT_SECRET;
+    /** The name of the network, the receiver in the header of every batch file. */
+    public String networkName = "NET";
+    /** How far above the authorized amount a final amount may be (a tip): 0.20 is 20%. */
+    public java.math.BigDecimal tipLimit = new java.math.BigDecimal("0.20");
+
     public List<Merchant> merchants = List.of(
             new Merchant("MERCHANT0000001", "Corner Cafe", "5814"),
             new Merchant("MERCHANT0000002", "Gas Station", "5541"),
@@ -45,6 +57,9 @@ public final class AcquirerConfig {
         c.networkControlUrl = env("CARDNET_NETWORK_CONTROL_URL", c.networkControlUrl);
         c.httpPort = Integer.parseInt(env("CARDNET_HTTP_PORT", String.valueOf(c.httpPort)));
         c.networkTimeout = Duration.ofMillis(Long.parseLong(env("CARDNET_ACQUIRER_TIMEOUT_MS", String.valueOf(c.networkTimeout.toMillis()))));
+        String dataDir = System.getenv("CARDNET_DATA_DIR");
+        c.clearingDir = java.nio.file.Path.of(dataDir == null || dataDir.isBlank() ? "./data/clearing" : dataDir.trim());
+        c.fileSecret = env("CARDNET_FILE_KEY", c.fileSecret);
         c.demoCardPan = env("CARDNET_DEMO_CARD_PAN", c.demoCardPan);
         c.demoCardPin = env("CARDNET_DEMO_CARD_PIN", c.demoCardPin);
         c.demoCardExpiry = env("CARDNET_DEMO_CARD_EXPIRY", c.demoCardExpiry);

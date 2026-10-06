@@ -28,6 +28,8 @@ public final class Network implements AutoCloseable {
     private final ReversalWorker reversalWorker;
     private final NetworkServer server;
     private final NetworkControl control;
+    private final ClearingProcessor clearing;
+    private final com.bilal.cardnet.shared.PeriodicTask clearingTask;
 
     private Network(NetworkConfig config, DataSource ds, PanVault vault, Clock clock) {
         this.config = config;
@@ -43,6 +45,8 @@ public final class Network implements AutoCloseable {
         this.delivery = new AdviceDelivery(advices, link, config.issuerTimeout, config.adviceInterval, clock);
         this.server = new NetworkServer(config, router, chaos);
         this.control = new NetworkControl(config.controlPort, this::status, chaos);
+        this.clearing = config.clearingDir == null ? null : new ClearingProcessor(config, ds, vault, clock);
+        this.clearingTask = clearing == null ? null : new com.bilal.cardnet.shared.PeriodicTask("network-clearing", clearing::tick);
     }
 
     /** Starts every part. The database must already be migrated. */
@@ -54,6 +58,9 @@ public final class Network implements AutoCloseable {
         network.link.start();
         network.delivery.start();
         network.reversalWorker.start(config.reversalPoll);
+        if (network.clearingTask != null) {
+            network.clearingTask.start(config.clearingPoll);
+        }
         return network;
     }
 
@@ -72,6 +79,9 @@ public final class Network implements AutoCloseable {
         map.put("advicesWaiting", advices.countPending());
         map.put("reversalsWaiting", reversals.countPending("NETWORK"));
         map.put("counters", router.counters());
+        if (clearing != null) {
+            map.put("clearingFilesWaiting", clearing.waiting());
+        }
         map.put("chaos", chaos.toMap());
         return map;
     }
@@ -104,12 +114,20 @@ public final class Network implements AutoCloseable {
         return delivery;
     }
 
+    /** The clearing processor, or null when clearing is switched off (no clearing folder configured). */
+    public ClearingProcessor clearing() {
+        return clearing;
+    }
+
     public NetworkServer server() {
         return server;
     }
 
     @Override
     public void close() {
+        if (clearingTask != null) {
+            clearingTask.stop();
+        }
         delivery.stop();
         reversalWorker.stop();
         link.stop();

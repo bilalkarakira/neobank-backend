@@ -70,3 +70,13 @@ java -cp iso8583/target/iso8583-0.1.0-SNAPSHOT.jar com.bilal.cardnet.iso8583.cle
 ```
 
 The key is the text in `CARDNET_FILE_KEY` (a development default is built in). Do not rename a file before dumping it. One symmetric key for every party is a simulation shortcut.
+
+## End of day: capture and clearing
+
+Set `CARDNET_DATA_DIR` (the same folder for the network and the acquirer; default `./data/clearing`) and `CARDNET_FILE_KEY` (the same text everywhere) and start the network and the acquirer as above. On the POS page (port 9000) approved payments can get a final amount (a tip, up to 20% more) and cleared ones can be refunded; "Close the day" puts everything into one clearing file, the network checks it, splits it per issuer and passes it on, and the acknowledgement comes back. Until NeoBank ingests the files (P4c) you can try the chain with the stand-in issuer:
+
+```
+java -cp "shared/target/shared-0.1.0-SNAPSHOT.jar;iso8583/target/iso8583-0.1.0-SNAPSHOT.jar" tools/ClearingStub.java DATA_DIR
+```
+
+It answers every file as posted and posts nothing. Fees (merchant discount 2.00%, interchange 1.20%, scheme fee 0.05% each side) are only worked out and stored in P4; they are posted in P5.

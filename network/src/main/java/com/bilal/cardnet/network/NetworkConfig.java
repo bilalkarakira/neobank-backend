@@ -35,6 +35,21 @@ public final class NetworkConfig {
     /** 1.0 is the real schedule (1, 2, 4, 8, 16 s, then 60 s); tests shrink it. */
     public double retryScale = 1.0;
 
+    // ---- clearing (P4) ----
+
+    /** The folder shared with acquirer and issuer (see ClearingDirs). Null switches clearing off (the default in tests). */
+    public java.nio.file.Path clearingDir = null;
+    public Duration clearingPoll = Duration.ofSeconds(2);
+    /** The text the file key is made from; the same in every process that reads or writes clearing files. */
+    public String fileSecret = com.bilal.cardnet.iso8583.clearing.ClearingFileCodec.DEFAULT_SECRET;
+    /** The name the network puts in file headers and expects as the receiver of an acquirer's file. */
+    public String networkName = "NET";
+    /** Acquirers whose files are accepted (the sender in the file header). */
+    public Set<String> knownAcquirers = Set.of("123456");
+    public BigDecimal merchantDiscountRate = new BigDecimal("0.0200");
+    public BigDecimal interchangeRate = new BigDecimal("0.0120");
+    public BigDecimal schemeFeeRate = new BigDecimal("0.0005");
+
     public Duration idleTimeout = Duration.ofSeconds(120);
     public int maxConnections = 50;
 
@@ -45,6 +60,12 @@ public final class NetworkConfig {
         c.controlPort = intEnv("CARDNET_CONTROL_PORT", c.controlPort);
         c.issuerTimeout = Duration.ofMillis(intEnv("CARDNET_ISSUER_TIMEOUT_MS", (int) c.issuerTimeout.toMillis()));
         c.echoInterval = Duration.ofMillis(intEnv("CARDNET_ECHO_INTERVAL_MS", (int) c.echoInterval.toMillis()));
+        String dataDir = System.getenv("CARDNET_DATA_DIR");
+        c.clearingDir = java.nio.file.Path.of(dataDir == null || dataDir.isBlank() ? "./data/clearing" : dataDir.trim());
+        String fileKey = System.getenv("CARDNET_FILE_KEY");
+        if (fileKey != null && !fileKey.isBlank()) {
+            c.fileSecret = fileKey;
+        }
         String routes = System.getenv("CARDNET_ROUTES"); // "999900=127.0.0.1:8583;123456=127.0.0.1:8584"
         if (routes != null && !routes.isBlank()) {
             List<Route> parsed = new ArrayList<>();

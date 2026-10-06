@@ -234,6 +234,21 @@ class ClearingFileCodecTest {
     }
 
     @Test
+    void bytesAfterTheLastCompleteRecordAreRefused() {
+        String a = pack(purchase(1, "000000000100"));
+        String good = header() + "\n" + a + "\n" + trailer(1, 100, sha(a)) + "\n";
+        assertThat(reasonOfPlain(good)).isNull();
+        assertThat(reasonOfPlain(good + "junk")).isEqualTo(Reason.BAD_TRAILER);
+    }
+
+    @Test
+    void sameStanWithAnotherRrnIsAnotherItem() {
+        String a = pack(purchase(1, "000000000100"));
+        String other = pack(purchase(1, "000000000100").set(37, "999999999999"));
+        assertThat(reasonOf(header(), a, other, trailer(2, 200, sha(a, other)))).isNull();
+    }
+
+    @Test
     void controlTotalAcrossManyRecordsAndLargeAmounts() {
         String a = pack(purchase(1, "999999999999"));
         String b = pack(purchase(2, "999999999999"));

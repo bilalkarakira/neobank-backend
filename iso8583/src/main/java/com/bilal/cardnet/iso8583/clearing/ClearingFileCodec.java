@@ -44,6 +44,7 @@ public final class ClearingFileCodec {
     public static final String DEFAULT_SECRET = "neobank-dev-clearing-key-change-me";
 
     private static final byte[] MAGIC = "NCLR1".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] ACK_MAGIC = "NCLA1".getBytes(StandardCharsets.US_ASCII);
     private static final int NONCE = 12;
     private static final int TAG_BYTES = 16;
     private static final DateTimeFormatter DATE = DateTimeFormatter.BASIC_ISO_DATE;
@@ -74,7 +75,10 @@ public final class ClearingFileCodec {
 
     /** Writes through a temporary name and renames, so a reader never sees half a file. Returns the final path. */
     public Path write(Path directory, String fileName, ClearingFile file) {
-        byte[] bytes = encode(file, fileName);
+        return writeBytes(directory, fileName, encode(file, fileName));
+    }
+
+    private static Path writeBytes(Path directory, String fileName, byte[] bytes) {
         Path temp = directory.resolve(fileName + ".tmp");
         Path target = directory.resolve(fileName);
         try {
@@ -223,6 +227,37 @@ public final class ClearingFileCodec {
     // ---- encryption -----------------------------------------------------------------------------------------
 
     byte[] seal(byte[] plain, String fileName) {
+        return seal(MAGIC, plain, fileName);
+    }
+
+    byte[] open(byte[] bytes, String fileName) {
+        return open(MAGIC, bytes, fileName);
+    }
+
+    // ---- acknowledgements -----------------------------------------------------------------------------------
+
+    /** The bytes of an acknowledgement to store under {@code fileName} (encrypted like a clearing file, other magic). */
+    public byte[] encodeAck(ClearingAck ack, String fileName) {
+        return seal(ACK_MAGIC, ack.plainText(), fileName);
+    }
+
+    public Path writeAck(Path directory, String fileName, ClearingAck ack) {
+        return writeBytes(directory, fileName, encodeAck(ack, fileName));
+    }
+
+    public ClearingAck readAck(Path path) {
+        try {
+            return decodeAck(Files.readAllBytes(path), path.getFileName().toString());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    public ClearingAck decodeAck(byte[] bytes, String fileName) {
+        return ClearingAck.parse(open(ACK_MAGIC, bytes, fileName));
+    }
+
+    private byte[] seal(byte[] magic, byte[] plain, String fileName) {
         try {
             byte[] nonce = new byte[NONCE];
             RANDOM.nextBytes(nonce);
@@ -230,27 +265,27 @@ public final class ClearingFileCodec {
             cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BYTES * 8, nonce));
             cipher.updateAAD(fileName.getBytes(StandardCharsets.UTF_8));
             byte[] encrypted = cipher.doFinal(plain);
-            byte[] out = new byte[MAGIC.length + NONCE + encrypted.length];
-            System.arraycopy(MAGIC, 0, out, 0, MAGIC.length);
-            System.arraycopy(nonce, 0, out, MAGIC.length, NONCE);
-            System.arraycopy(encrypted, 0, out, MAGIC.length + NONCE, encrypted.length);
+            byte[] out = new byte[magic.length + NONCE + encrypted.length];
+            System.arraycopy(magic, 0, out, 0, magic.length);
+            System.arraycopy(nonce, 0, out, magic.length, NONCE);
+            System.arraycopy(encrypted, 0, out, magic.length + NONCE, encrypted.length);
             return out;
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    byte[] open(byte[] bytes, String fileName) {
-        if (bytes == null || bytes.length < MAGIC.length + NONCE + TAG_BYTES
-                || !Arrays.equals(Arrays.copyOf(bytes, MAGIC.length), MAGIC)) {
+    private byte[] open(byte[] magic, byte[] bytes, String fileName) {
+        if (bytes == null || bytes.length < magic.length + NONCE + TAG_BYTES
+                || !Arrays.equals(Arrays.copyOf(bytes, magic.length), magic)) {
             throw new ClearingFileException(Reason.NOT_A_CLEARING_FILE, "not a clearing file");
         }
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, key,
-                    new GCMParameterSpec(TAG_BYTES * 8, bytes, MAGIC.length, NONCE));
+                    new GCMParameterSpec(TAG_BYTES * 8, bytes, magic.length, NONCE));
             cipher.updateAAD(fileName.getBytes(StandardCharsets.UTF_8));
-            return cipher.doFinal(bytes, MAGIC.length + NONCE, bytes.length - MAGIC.length - NONCE);
+            return cipher.doFinal(bytes, magic.length + NONCE, bytes.length - magic.length - NONCE);
         } catch (AEADBadTagException e) {
             throw new ClearingFileException(Reason.DECRYPT_FAILED,
                     "the file cannot be decrypted: wrong key, wrong file name, or its bytes were changed");

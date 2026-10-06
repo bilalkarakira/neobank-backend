@@ -3,13 +3,16 @@ package com.bilal.cardnet.acquirer;
 import com.bilal.cardnet.network.Network;
 import com.bilal.cardnet.network.NetworkConfig;
 import com.bilal.cardnet.network.IssuerLink;
+import com.bilal.cardnet.shared.ClearingDirs;
 import com.bilal.cardnet.shared.PanVault;
+import com.bilal.cardnet.shared.testing.FakeIssuerClearing;
 import com.bilal.cardnet.shared.testing.Await;
 import com.bilal.cardnet.shared.testing.FakeIssuer;
 import com.bilal.cardnet.shared.testing.TestDatabase;
 
 import javax.sql.DataSource;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -36,12 +39,32 @@ final class AcqHarness implements AutoCloseable {
     final AcquirerConfig config = new AcquirerConfig();
     Network network;
     Acquirer acquirer;
+    final Path clearingRoot;
+    final ClearingDirs dirs;
+    final FakeIssuerClearing clearingIssuer;
 
     AcqHarness() throws IOException {
         this(c -> { });
     }
 
     AcqHarness(Consumer<AcquirerConfig> tweak) throws IOException {
+        this(null, tweak, n -> { });
+    }
+
+    /** With clearing switched on: all three parties share {@code clearingRoot}; the network is polled by hand unless the test says otherwise. */
+    AcqHarness(Path clearingRoot, Consumer<AcquirerConfig> tweak, Consumer<NetworkConfig> networkTweak) throws IOException {
+        this.clearingRoot = clearingRoot;
+        this.dirs = clearingRoot == null ? null : new ClearingDirs(clearingRoot);
+        this.clearingIssuer = clearingRoot == null ? null : new FakeIssuerClearing(clearingRoot, "acq-test-secret");
+        if (clearingRoot != null) {
+            networkConfig.clearingDir = clearingRoot;
+            networkConfig.fileSecret = "acq-test-secret";
+            networkConfig.clearingPoll = Duration.ofHours(1);
+            config.clearingDir = clearingRoot;
+            config.fileSecret = "acq-test-secret";
+            config.clearingPoll = Duration.ofHours(1);
+        }
+        networkTweak.accept(networkConfig);
         networkConfig.acquirerPort = 0;
         networkConfig.controlPort = 0;
         networkConfig.routes = List.of(new NetworkConfig.Route("999900", "127.0.0.1", issuer.port()));
@@ -64,6 +87,30 @@ final class AcqHarness implements AutoCloseable {
         config.retryScale = 0.02;
         tweak.accept(config);
         acquirer = Acquirer.start(config, ds, vault, Clock.systemUTC());
+    }
+
+    /** One round of everything that moves clearing files: network, issuer, network again, acquirer. */
+    void pump() {
+        network.clearing().tick();
+        clearingIssuer.tick();
+        network.clearing().tick();
+        acquirer.clearing().processAcknowledgements();
+    }
+
+    /** Pumps until {@code condition} holds (or fails the test after a few seconds). */
+    void pumpUntil(String what, java.util.function.BooleanSupplier condition) {
+        Await.until(what, () -> {
+            pump();
+            return condition.getAsBoolean();
+        });
+    }
+
+    java.util.UUID payApproved(String amount) {
+        AcquirerService.Result result = service().pay(pay(amount));
+        if (!result.status().equals("APPROVED")) {
+            throw new IllegalStateException("expected an approved payment, got " + result.status());
+        }
+        return result.id();
     }
 
     AcquirerService service() {
