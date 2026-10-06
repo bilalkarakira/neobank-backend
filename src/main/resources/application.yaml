@@ -69,6 +69,7 @@ app:
     listener:
       enabled: true
       port: 8583
+      host: ${CARD_LISTENER_HOST:127.0.0.1}   # loopback unless a container needs 0.0.0.0 (then never publish this port)
       max-connections: 50
       idle-timeout: 120s
     clearing:                     # files from the card network: this bank reads issuer-in/ and answers in issuer-out/

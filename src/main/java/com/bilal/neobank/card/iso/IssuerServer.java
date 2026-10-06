@@ -55,12 +55,12 @@ public class IssuerServer implements SmartLifecycle {
         }
         try {
             capacity = new Semaphore(config.maxConnections());
-            server = new ServerSocket(config.port(), 50, InetAddress.getLoopbackAddress());
+            server = new ServerSocket(config.port(), 50, InetAddress.getByName(config.host()));
         } catch (IOException e) {
             throw new IllegalStateException("The issuer interface could not listen on port " + config.port(), e);
         }
         Thread.ofVirtual().name("issuer-accept").start(this::acceptLoop);
-        log.info("Issuer ISO 8583 interface listening on 127.0.0.1:{}", server.getLocalPort());
+        log.info("Issuer ISO 8583 interface listening on {}:{}", server.getInetAddress().getHostAddress(), server.getLocalPort());
     }
 
     @Override

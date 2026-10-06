@@ -2,6 +2,7 @@ package com.bilal.neobank.card;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.context.annotation.Configuration;
 
 import java.math.BigDecimal;
@@ -18,7 +19,8 @@ public record CardProperties(String panHmacKey, int maxPerCustomer, BigDecimal d
         Duration holdTtl, int maxPinFailures, List<String> blockedMcc, boolean authorizationsEnabled,
         Listener listener) {
 
-    public record Listener(boolean enabled, int port, int maxConnections, Duration idleTimeout) {
+    /** {@code host}: the address the ISO 8583 listener binds to. Loopback by default; a container needs 0.0.0.0 (and must not publish the port). */
+    public record Listener(boolean enabled, int port, int maxConnections, Duration idleTimeout, @DefaultValue("127.0.0.1") String host) {
     }
 
     @Configuration
