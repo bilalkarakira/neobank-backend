@@ -1,0 +1,12 @@
+neobank-backend
+neobank-cardnet
+docs
+**/.git
+**/node_modules
+**/dist
+**/target
+**/data
+neobank-demo/*
+!neobank-demo/docker
+neobank-demo/docker/*
+!neobank-demo/docker/nginx.conf
