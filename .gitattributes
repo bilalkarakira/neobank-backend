@@ -1,0 +1,3 @@
+samples/** -text
+*.clr binary
+*.ack binary
