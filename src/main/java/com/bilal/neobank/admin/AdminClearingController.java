@@ -43,7 +43,7 @@ public class AdminClearingController {
     public record ReceivableRow(String email, String last4, String amount, String outstanding, Instant createdAt) {
     }
 
-    /** {@code booksMatch}: the card settlement account equals posted purchases minus refunds, and the receivable account equals what is open. */
+    /** {@code booksMatch}: the card settlement account equals posted purchases minus refunds minus what settlement has paid out, and the receivable account equals what is open. */
     public record Totals(String receivableOutstanding, String settlementPayable, String postedNet, String receivableAccount,
             boolean booksMatch) {
     }
@@ -106,7 +106,9 @@ public class AdminClearingController {
                 select coalesce(sum(case when result in ('POSTED', 'FORCE_POSTED') then amount
                                          when result = 'REFUND_POSTED' then -amount else 0 end), 0) from clearing_items
                 """).query(BigDecimal.class).single();
-        boolean match = settlement.compareTo(postedNet) == 0 && receivableAccount.compareTo(outstanding.negate()) == 0;
+        // settlement pays the card settlement account down by the gross it settled: what is left is cleared and not yet settled
+        BigDecimal settledGross = jdbc.sql("select coalesce(sum(purchases - refunds), 0) from settlement_runs where status = 'MATCHED'").query(BigDecimal.class).single();
+        boolean match = settlement.compareTo(postedNet.subtract(settledGross)) == 0 && receivableAccount.compareTo(outstanding.negate()) == 0;
         return new Totals(money(outstanding), money(settlement), money(postedNet), money(receivableAccount), match);
     }
 

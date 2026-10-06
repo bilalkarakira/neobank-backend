@@ -129,6 +129,10 @@ class SettlementTest extends ClearingTestBase {
         assertThat(jdbc.queryForObject("select count(*) from clearing_items where settlement_run_id is null", Integer.class)).isZero();
         assertThat(balanceOf(f)).as("settlement never touches a customer").isEqualByComparingTo(customerBefore);
         assertBooksBalance();
+        // the clearing books check of the admin stays true after settlement (it once forgot that settlement pays the account down)
+        String admin = adminToken();
+        mockMvc.perform(get("/api/admin/clearing").header("Authorization", admin)).andExpect(jsonPath("$.totals.booksMatch").value(true))
+                .andExpect(jsonPath("$.totals.settlementPayable").value("0.00")).andExpect(jsonPath("$.totals.postedNet").value("65.00"));
     }
 
     @Test
