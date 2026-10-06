@@ -138,10 +138,10 @@ public class ClearingIngestService {
         UUID fileRow = UUID.randomUUID();
         try {
             jdbc.sql("""
-                    insert into clearing_files (id, file_name, network_file_id, status, item_count, control_total, received_at)
-                    values (:id, :name, :nid, 'RECEIVED', :count, :total, :now)
+                    insert into clearing_files (id, file_name, network_file_id, status, item_count, control_total, received_at, business_date)
+                    values (:id, :name, :nid, 'RECEIVED', :count, :total, :now, :date)
                     """).param("id", fileRow).param("name", name).param("nid", file.fileId()).param("count", file.presentments().size())
-                    .param("total", file.controlTotal()).param("now", Timestamp.from(clock.instant())).update();
+                    .param("total", file.controlTotal()).param("now", Timestamp.from(clock.instant())).param("date", java.sql.Date.valueOf(file.businessDate())).update();
         } catch (DuplicateKeyException e) {
             refuse(name, file.fileId(), "DUPLICATE_FILE: this file id was already processed");
             return -1;

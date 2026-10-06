@@ -57,16 +57,27 @@ abstract class ClearingTestBase extends IssuerTestBase {
                 .set(42, m.get(42)).set(43, m.get(43)).set(49, m.get(49));
     }
 
+    /** The business date of the clearing files made by {@link #newFile()}. */
+    protected static final java.time.LocalDate DAY = java.time.LocalDate.of(2026, 10, 2); // a Friday in the past
+
     protected UUID newFile() {
+        return newFile(DAY);
+    }
+
+    protected UUID newFile(java.time.LocalDate businessDate) {
         UUID id = UUID.randomUUID();
         int n = files.incrementAndGet();
-        jdbc.update("insert into clearing_files (id, file_name, network_file_id, status, received_at) values (?, ?, ?, 'RECEIVED', ?)", id,
-                "T%07d.clr".formatted(n), "T%07d".formatted(n), Timestamp.from(java.time.Instant.now()));
+        jdbc.update("insert into clearing_files (id, file_name, network_file_id, status, received_at, business_date) values (?, ?, ?, 'RECEIVED', ?, ?)", id,
+                "T%07d.clr".formatted(n), "T%07d".formatted(n), Timestamp.from(java.time.Instant.now()), businessDate);
         return id;
     }
 
     protected ClearingPoster.Result present(Message presentment) {
         return poster.post(newFile(), 1, presentment);
+    }
+
+    protected ClearingPoster.Result present(Message presentment, java.time.LocalDate businessDate) {
+        return poster.post(newFile(businessDate), 1, presentment);
     }
 
     protected BigDecimal balanceOf(UUID account) {

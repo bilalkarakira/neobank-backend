@@ -14,9 +14,11 @@ public class ClearingScheduler {
     private static final Logger log = LoggerFactory.getLogger(ClearingScheduler.class);
 
     private final ClearingIngestService service;
+    private final SettlementIngestService settlement;
 
-    public ClearingScheduler(ClearingIngestService service) {
+    public ClearingScheduler(ClearingIngestService service, SettlementIngestService settlement) {
         this.service = service;
+        this.settlement = settlement;
     }
 
     @Scheduled(fixedDelayString = "${app.cards.clearing.poll:5s}", initialDelayString = "${app.cards.clearing.poll:5s}")
@@ -29,6 +31,14 @@ public class ClearingScheduler {
             }
         } catch (RuntimeException e) {
             log.error("Clearing pass failed ({}); trying again at the next beat", e.getClass().getSimpleName());
+        }
+        try {
+            SettlementIngestService.Summary summary = settlement.ingest();
+            if (summary.matched() + summary.disputed() + summary.refused() > 0) {
+                log.info("Settlement: {} statement(s) matched, {} disputed, {} refused", summary.matched(), summary.disputed(), summary.refused());
+            }
+        } catch (RuntimeException e) {
+            log.error("Settlement pass failed ({}); trying again at the next beat", e.getClass().getSimpleName());
         }
     }
 }

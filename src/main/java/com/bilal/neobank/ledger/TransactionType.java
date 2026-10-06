@@ -12,5 +12,7 @@ public enum TransactionType {
     /** The part of a cleared payment the customer could not cover: the bank pays the network and carries a receivable. */
     CARD_SHORTFALL,
     /** The customer's money used to pay off a card shortfall. */
-    CARD_COLLECTION
+    CARD_COLLECTION,
+    /** Settlement of a business day of cleared card payments with the settlement bank (system only). */
+    CARD_SETTLEMENT
 }

@@ -56,7 +56,7 @@ class ClearingIngestTest extends ClearingTestBase {
     @BeforeEach
     void setUp() {
         codec = ClearingFileCodec.withSecret(SECRET);
-        ingest = new ClearingIngestService(new ClearingProperties(true, root.toString(), "999900", "NET", SECRET, Duration.ofSeconds(5)),
+        ingest = new ClearingIngestService(new ClearingProperties(true, root.toString(), "999900", "NET", SECRET, Duration.ofSeconds(5), new BigDecimal("0.0120"), new BigDecimal("0.0005")),
                 jdbcClient, poster, clock);
         in = root.resolve("issuer-in");
         out = root.resolve("issuer-out");
