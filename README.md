@@ -60,3 +60,13 @@ java -cp iso8583/target/iso8583-0.1.0-SNAPSHOT.jar com.bilal.cardnet.iso8583.Ins
 
 Prints a hex dump and the decoded fields. The card number is masked (first six, last four) and PIN data is hidden unless
 `--show-sensitive` is given. Test card numbers use BIN `999900`, which belongs to no real card brand.
+
+## Clearing files
+
+`com.bilal.cardnet.iso8583.clearing` reads and writes clearing files (P4): a `1644` header, one `1240` first presentment per line, a `1644` trailer with the count, the control total and a SHA-256, all encrypted with AES-256-GCM (the file name is part of the check). To look inside one, with card numbers masked:
+
+```
+java -cp iso8583/target/iso8583-0.1.0-SNAPSHOT.jar com.bilal.cardnet.iso8583.clearing.ClearingDump path\to\file.clr
+```
+
+The key is the text in `CARDNET_FILE_KEY` (a development default is built in). Do not rename a file before dumping it. One symmetric key for every party is a simulation shortcut.
