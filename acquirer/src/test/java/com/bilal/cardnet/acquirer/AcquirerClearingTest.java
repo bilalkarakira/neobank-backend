@@ -560,7 +560,8 @@ class AcquirerClearingTest {
                     ResultSetMetaData meta = rs.getMetaData();
                     while (rs.next()) {
                         for (int i = 1; i <= meta.getColumnCount(); i++) {
-                            if (!meta.getColumnTypeName(i).equals("bytea") && rs.getString(i) != null) {
+                            // timestamps are left out: their microseconds can contain any four digits, the PIN included, by chance
+                            if (!meta.getColumnTypeName(i).equals("bytea") && !meta.getColumnTypeName(i).startsWith("timestamp") && rs.getString(i) != null) {
                                 assertThat(rs.getString(i)).as(table + "." + meta.getColumnName(i)).doesNotContain(PAN).doesNotContain(AcqHarness.PIN);
                             }
                         }

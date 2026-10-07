@@ -213,7 +213,7 @@
           var b = el('button', null, 'Void'); b.addEventListener('click', function () { voidSale(t.id, b); });
           if (!t.cash) { w.appendChild(tip); w.appendChild(set); }
           w.appendChild(b); a.appendChild(w);
-          if (!t.cash && !t.finalAmount) {
+          if (!t.cash && !t.online && !t.finalAmount) {
             var w3 = el('div', 'inline');
             var more = el('input'); more.placeholder = 'add amount'; more.inputMode = 'decimal'; more.setAttribute('aria-label', 'Amount to add');
             var addBtn = el('button', null, 'Add to payment'); addBtn.title = 'Ask the bank for more on this payment, like a pump that keeps filling';
