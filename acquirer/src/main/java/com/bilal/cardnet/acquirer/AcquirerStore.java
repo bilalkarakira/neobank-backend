@@ -26,7 +26,7 @@ public final class AcquirerStore {
     /** A payment as the console lists it. */
     public record Row(UUID id, Instant createdAt, String stan, String rrn, String merchantName, String maskedPan, BigDecimal amount,
             String status, String responseCode, String authCode, String reason, boolean timedOut, boolean pinUsed,
-            String kind, BigDecimal finalAmount, UUID batchId, UUID refundOf, boolean cash, BigDecimal incrementTotal) {
+            String kind, BigDecimal finalAmount, UUID batchId, UUID refundOf, boolean cash, BigDecimal incrementTotal, boolean online) {
 
         /** What the bank has authorized for this payment in all: the first amount and every approved addition. */
         public BigDecimal authorizedTotal() {
@@ -52,13 +52,13 @@ public final class AcquirerStore {
         this.vault = vault;
     }
 
-    /** Records a payment about to be sent (status PENDING). {@code request} is stored without its PIN data. */
+    /** Records a payment about to be sent (status PENDING). {@code request} is stored without its PIN data and security code. */
     public void insert(UUID id, Message request, String merchantName, boolean pinUsed, Instant now) {
-        Message withoutPin = request.copyWithMti(request.mti()).remove(52);
+        Message withoutPin = request.copyWithMti(request.mti()).remove(52).remove(53);
         String sql = """
                 insert into acq_transactions (id, created_at, updated_at, stan, rrn, terminal_id, merchant_id, merchant_name, mcc, masked_pan,
-                                              last4, amount, currency, de7, pin_used, status, request_ciphertext)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+                                              last4, amount, currency, de7, pin_used, online, status, request_ciphertext)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
                 """;
         try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setObject(1, id);
@@ -76,7 +76,8 @@ public final class AcquirerStore {
             ps.setString(13, request.get(49));
             ps.setString(14, request.get(7));
             ps.setBoolean(15, pinUsed);
-            ps.setBytes(16, vault.encrypt(packager.pack(withoutPin), id.toString()));
+            ps.setBoolean(16, request.has(22) && request.get(22).startsWith("81"));
+            ps.setBytes(17, vault.encrypt(packager.pack(withoutPin), id.toString()));
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new DataAccessException("could not record a payment", e);
@@ -175,7 +176,7 @@ public final class AcquirerStore {
 
     /** Records a request for more, before it is sent (PENDING). The stored copy never has PIN data. */
     public void insertIncrement(UUID id, UUID paymentId, Message request, Instant now) {
-        Message withoutPin = request.copyWithMti(request.mti()).remove(52);
+        Message withoutPin = request.copyWithMti(request.mti()).remove(52).remove(53);
         exec("insert into acq_increments (id, payment_id, created_at, updated_at, stan, rrn, amount, status, request_ciphertext) values (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)",
                 id, paymentId, Timestamp.from(now), Timestamp.from(now), request.get(11), request.get(37), Messages.amount(request),
                 vault.encrypt(packager.pack(withoutPin), id.toString()));
@@ -260,7 +261,7 @@ public final class AcquirerStore {
                             rs.getString("status"), rs.getString("response_code"), rs.getString("auth_code"), rs.getString("reason"),
                             rs.getBoolean("timed_out"), rs.getBoolean("pin_used"), rs.getString("kind"), rs.getBigDecimal("final_amount"),
                             rs.getObject("batch_id", UUID.class), rs.getObject("refund_of", UUID.class), "6011".equals(rs.getString("mcc")),
-                            rs.getBigDecimal("increment_total")));
+                            rs.getBigDecimal("increment_total"), rs.getBoolean("online")));
                 }
             }
         } catch (SQLException e) {

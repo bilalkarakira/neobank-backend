@@ -89,6 +89,18 @@ class RulesTest {
     }
 
     @Test
+    void anOnlinePaymentIsNeverStoodInFor() {
+        // the network cannot check the security code, so only the bank may answer
+        StandIn.Decision withCode = decide(purchase("5.00").set(53, "123"), "0");
+        assertThat(withCode.approve()).isFalse();
+        assertThat(withCode.reason()).contains("online").contains("security code");
+        assertThat(decide(purchase("5.00").set(22, "812").set(25, "59"), "0").approve()).as("even without the code, the entry mode says online").isFalse();
+        assertThat(decide(purchase("5.00").set(22, "810"), "0").approve()).isFalse();
+        assertThat(decide(purchase("5.00").set(22, "051"), "0").approve()).as("a card in a terminal").isTrue();
+        assertThat(decide(purchase("5.00").set(22, "021"), "0").approve()).as("a magnetic stripe").isTrue();
+    }
+
+    @Test
     void onlyPurchasesInDollarsAtAllowedMerchantsQualify() {
         assertThat(decide(purchase("5.00").set(3, "010000"), "0").approve()).as("cash").isFalse();
         assertThat(decide(purchase("5.00").set(3, "200000"), "0").approve()).as("refund").isFalse();

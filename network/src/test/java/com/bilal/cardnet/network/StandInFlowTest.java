@@ -61,9 +61,10 @@ class StandInFlowTest {
                 assertThat(code(acquirer.exchange(h.purchase(PAN, "5.00").set(3, "010000")))).as("cash").isEqualTo("91");
                 assertThat(code(acquirer.exchange(h.purchase(PAN, "5.00").set(49, "978")))).as("euro").isEqualTo("91");
                 assertThat(code(acquirer.exchange(h.purchase(PAN, "5.00").set(90, "0100000001" + "1005120000" + "00000123456" + "00000000000")))).as("an increment").isEqualTo("91");
+                assertThat(code(acquirer.exchange(h.purchase(PAN, "5.00").set(22, "812").set(25, "59").set(53, "123")))).as("an online payment").isEqualTo("91");
             }
             assertThat(h.count("select count(*) from net_standin_advices")).isZero();
-            assertThat(h.count("select count(*) from net_transactions where route = 'REFUSED' and answer_code = '91'")).isEqualTo(6);
+            assertThat(h.count("select count(*) from net_transactions where route = 'REFUSED' and answer_code = '91'")).isEqualTo(7);
         }
     }
 

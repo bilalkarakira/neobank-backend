@@ -130,7 +130,8 @@ public final class PaymentRouter {
             }
         }
         if (timedOut) {
-            late.put(Messages.responseKey(request), new Late(request, approved, clock.instant()));
+            // what is remembered for a late answer never has PIN data or the security code
+            late.put(Messages.responseKey(request), new Late(request.copyWithMti(request.mti()).remove(52).remove(53), approved, clock.instant()));
             forgetOldLate();
         }
         String note = (timedOut ? "issuer timed out; " : "issuer unavailable; ") + (approved ? "stand-in approved" : "stand-in refused: " + why);

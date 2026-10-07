@@ -74,6 +74,28 @@
     <div id="result" aria-live="polite" style="margin-top:14px"></div>
   </section>
 
+  <section aria-labelledby="web-h">
+    <h2 id="web-h">Online shop</h2>
+    <p class="muted" style="margin:0 0 8px">An online payment has no card in a terminal and no PIN: the shop sends the card number, the expiry date and the <strong>security code</strong> printed on the card. The bank checks the code and may refuse; the code is never stored or shown.</p>
+    <form id="web-form" autocomplete="off">
+      <label for="web-pan">Card number</label>
+      <input id="web-pan" inputmode="numeric" placeholder="16 digits" required>
+      <div class="row">
+        <div><label for="web-expiry">Valid through (MM/YY)</label><input id="web-expiry" placeholder="10/29" required></div>
+        <div><label for="web-cvv">Security code</label><input id="web-cvv" inputmode="numeric" placeholder="3 digits" type="password" required></div>
+      </div>
+      <div class="row">
+        <div><label for="web-amount">Amount (USD)</label><input id="web-amount" inputmode="decimal" placeholder="19.99" required></div>
+        <div><label for="web-shop">Shop</label><select id="web-shop"></select></div>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit" id="web-go">Pay online</button>
+        <button type="button" id="web-demo" title="Fills in the published demo card of NeoBank's demo data">Use the demo card</button>
+      </div>
+    </form>
+    <div id="web-result" aria-live="polite" style="margin-top:14px"></div>
+  </section>
+
   <section aria-labelledby="atm-h">
     <h2 id="atm-h">Cash machine</h2>
     <p class="muted" style="margin:0 0 8px">A cash withdrawal is a payment with its own processing code. The PIN is required, the machine pays notes of 10 (10 to <span id="atm-max">500</span>), and the bank applies its cash limits. It clears with the day like a payment; there is no tip and no refund.</p>
@@ -175,7 +197,7 @@
       rows.forEach(function (t) {
         var tr = el('tr'), refund = t.kind === 'REFUND';
         tr.appendChild(el('td', 'mono', new Date(t.createdAt).toLocaleTimeString()));
-        tr.appendChild(el('td', null, t.merchant + (refund ? ' (refund)' : t.cash ? ' (cash)' : '')));
+        tr.appendChild(el('td', null, t.merchant + (refund ? ' (refund)' : t.cash ? ' (cash)' : t.online ? ' (online)' : '')));
         tr.appendChild(el('td', 'mono', t.card));
         var added = t.incrementTotal && t.incrementTotal !== '0.00' ? ' + ' + t.incrementTotal : '';
         tr.appendChild(el('td', 'num', refund ? '-' + t.amount : t.finalAmount && t.finalAmount !== t.amount + added ? t.amount + added + ' \u2192 ' + t.finalAmount : t.amount + added));
@@ -330,6 +352,25 @@
       });
   });
 
+  $('web-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var button = $('web-go'); button.disabled = true;
+    var box = $('web-result'); clear(box); box.appendChild(el('div', 'banner REVERSING', 'Waiting for the bank…'));
+    api('POST', '/api/pay-online', { pan: $('web-pan').value, expiry: $('web-expiry').value, cvv: $('web-cvv').value, amount: $('web-amount').value, merchantId: $('web-shop').value })
+      .then(function (r) {
+        clear(box);
+        var kind = r.status !== 200 ? 'DECLINED' : r.json.status === 'APPROVED' ? 'APPROVED' : r.json.status === 'REVERSING' ? 'REVERSING' : 'DECLINED';
+        box.appendChild(el('div', 'banner ' + kind, r.status === 200 ? r.json.message : (r.json.error || 'The payment could not be sent.')));
+        $('web-cvv').value = '';
+        button.disabled = false; loadTransactions(); loadNetwork();
+      });
+  });
+
+  $('web-demo').addEventListener('click', function () {
+    if (!config) return;
+    $('web-pan').value = config.demoCard.pan; $('web-expiry').value = config.demoCard.expiry; $('web-cvv').value = config.demoCard.cvv;
+  });
+
   $('atm-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var button = $('atm-go'); button.disabled = true;
@@ -390,7 +431,7 @@
     config = r.json;
     if (config.atm) { $('atm-max').textContent = config.atm.max; }
     (config.merchants || []).forEach(function (m) {
-      var o = el('option', null, m.name + ' (MCC ' + m.mcc + ')'); o.value = m.id; $('shop').appendChild(o);
+      var o = el('option', null, m.name + ' (MCC ' + m.mcc + ')'); o.value = m.id; $('shop').appendChild(o); $('web-shop').appendChild(o.cloneNode(true));
     });
     $('use-demo').click();
     if (!config.clearing) { $('close-day').disabled = true; $('day-msg').appendChild(el('div', 'banner error', 'Clearing is switched off: no clearing folder is configured.')); }

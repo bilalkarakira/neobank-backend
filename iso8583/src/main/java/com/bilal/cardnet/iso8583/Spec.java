@@ -32,6 +32,7 @@ public final class Spec {
             new FieldDef(48, "Additional data, private", FieldType.ANS, Prefix.LLL, 999),
             new FieldDef(49, "Currency code, transaction", FieldType.N, Prefix.FIXED, 3),
             new FieldDef(52, "PIN data", FieldType.B, Prefix.FIXED, 16, true),
+            new FieldDef(53, "Card verification value 2 (CVV2)", FieldType.N, Prefix.LL, 4, true),
             new FieldDef(55, "ICC data", FieldType.B, Prefix.LLL, 510),
             new FieldDef(70, "Network management information code", FieldType.N, Prefix.FIXED, 3),
             new FieldDef(90, "Original data elements", FieldType.N, Prefix.FIXED, 42));

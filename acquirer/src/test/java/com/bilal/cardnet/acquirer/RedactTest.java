@@ -34,6 +34,21 @@ class RedactTest {
     }
 
     @Test
+    void theSecurityCodeIsOverwrittenByItsPlaceNotByItsValue() {
+        // the code 123 is also the end of the trace number 000123 and part of the amount: only the element itself may be hidden
+        Message online = payment().remove(52).set(4, "000000012300").set(11, "000123").set(22, "812").set(25, "59").set(53, "123");
+        byte[] real = new Packager().pack(online);
+        byte[] shown = Redact.redactedBytes(online);
+        String text = new String(shown, StandardCharsets.US_ASCII);
+
+        assertThat(shown).hasSameSizeAs(real);
+        assertThat(text).contains("000000012300").contains("000123").contains("812").contains("TERM0001");
+        assertThat(text).as("the element is a length and then the code").contains("03***");
+        assertThat(text).doesNotContain("03123");
+        assertThat(Redact.decoded(online)).contains("Card verification value 2").doesNotContain("  123\n");
+    }
+
+    @Test
     void aMessageWithoutAPinIsOnlyMaskedAtTheNumber() {
         String text = new String(Redact.redactedBytes(payment().remove(52)), StandardCharsets.US_ASCII);
 

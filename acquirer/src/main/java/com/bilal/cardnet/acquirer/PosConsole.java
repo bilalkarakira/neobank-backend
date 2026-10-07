@@ -29,6 +29,7 @@ import java.util.concurrent.Executors;
  * GET  /api/config            shops, demo card, acquirer and terminal ids
  * POST /api/pay               {pan, expiry, amount, merchantId, pin?}
  * POST /api/increase          {id, amount}  ask the bank for more on an approved payment (a pump that keeps filling)
+ * POST /api/pay-online        {pan, expiry, cvv, amount, merchantId}  an online payment (no PIN, the security code instead)
  * POST /api/withdraw          {pan, expiry, amount, pin}  a cash withdrawal at the cash machine (the PIN is required)
  * POST /api/resend            send the latest payment again (a duplicate)
  * POST /api/void              {id}
@@ -97,6 +98,7 @@ public final class PosConsole {
                 case "/api/transactions" -> only(exchange, method, "GET", () -> json(exchange, 200, transactions()));
                 case "/api/pay" -> only(exchange, method, "POST", () -> json(exchange, 200, pay(Json.parseFlat(body(exchange)))));
                 case "/api/increase" -> only(exchange, method, "POST", () -> json(exchange, 200, increase(Json.parseFlat(body(exchange)))));
+                case "/api/pay-online" -> only(exchange, method, "POST", () -> json(exchange, 200, payOnline(Json.parseFlat(body(exchange)))));
                 case "/api/withdraw" -> only(exchange, method, "POST", () -> json(exchange, 200, withdraw(Json.parseFlat(body(exchange)))));
                 case "/api/resend" -> only(exchange, method, "POST", () -> json(exchange, 200, resultMap(service.resendLast())));
                 case "/api/void" -> only(exchange, method, "POST", () -> json(exchange, 200, voidSale(Json.parseFlat(body(exchange)))));
@@ -169,6 +171,7 @@ public final class PosConsole {
         Map<String, Object> demo = Json.object();
         demo.put("pan", config.demoCardPan);
         demo.put("pin", config.demoCardPin);
+        demo.put("cvv", config.demoCardCvv);
         demo.put("expiry", config.demoCardExpiry);
         map.put("demoCard", demo);
         map.put("clearing", clearing.enabled());
@@ -190,6 +193,11 @@ public final class PosConsole {
 
     private Map<String, Object> increase(Map<String, Object> in) {
         return resultMap(service.increase(new AcquirerService.IncreaseRequest(id(in), text(in, "amount"))));
+    }
+
+    private Map<String, Object> payOnline(Map<String, Object> in) {
+        return resultMap(service.payOnline(new AcquirerService.OnlineRequest(text(in, "pan"), text(in, "expiry"), text(in, "cvv"), text(in, "amount"),
+                text(in, "merchantId"))));
     }
 
     private Map<String, Object> withdraw(Map<String, Object> in) {
@@ -305,6 +313,7 @@ public final class PosConsole {
         r.put("finalAmount", row.finalAmount() == null ? null : row.finalAmount().setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
         r.put("kind", row.kind());
         r.put("cash", row.cash());
+        r.put("online", row.online());
         r.put("incrementTotal", row.incrementTotal().setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
         r.put("refundOf", row.refundOf() == null ? null : row.refundOf().toString());
         r.put("status", row.status());

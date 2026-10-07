@@ -118,6 +118,15 @@ class MessagesTest {
     }
 
     @Test
+    void anAdviceNeverCarriesTheSecurityCodeOfAnOnlinePayment() {
+        Message advice = Messages.advice(payment().set(22, "812").set(25, "59").set(53, "123"), "SI4F2K");
+
+        assertThat(advice.has(53)).isFalse();
+        assertThat(advice.has(52)).isFalse();
+        assertThat(advice.get(22)).as("the rest of the request is kept").isEqualTo("812");
+    }
+
+    @Test
     void networkManagementMessagesCarryTheirCode() {
         assertThat(Messages.signOn("000001", "1005120000").get(70)).isEqualTo("001");
         assertThat(Messages.echo("000002", "1005120000").get(70)).isEqualTo("301");

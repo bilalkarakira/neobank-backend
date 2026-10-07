@@ -14,6 +14,7 @@ public final class PosTexts {
             case "13" -> "The payment request was not valid.";
             case "14" -> "The card details did not match.";
             case "15" -> "No bank is known for this card number.";
+            case "N7" -> "The security code is wrong.";
             case "30" -> "The payment request was malformed.";
             case "51" -> "Not enough available money.";
             case "54" -> "The card has expired.";

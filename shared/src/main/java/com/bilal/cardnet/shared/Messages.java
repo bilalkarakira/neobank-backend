@@ -129,11 +129,11 @@ public final class Messages {
 
     /**
      * The 0120 authorization advice for a payment the network approved by itself: the request again, without any PIN
-     * data, with the authorization code it gave and DE 39 = 00 ("approved").
+     * data or security code, with the authorization code it gave and DE 39 = 00 ("approved").
      */
     public static Message advice(Message request, String authCode) {
         Message advice = request.copyWithMti("0120");
-        advice.remove(52);
+        advice.remove(52).remove(53);
         return advice.set(38, authCode).set(39, "00");
     }
 

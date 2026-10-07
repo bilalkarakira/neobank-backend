@@ -58,6 +58,7 @@ when unpacking, a value that breaks its type, a bad prefix, truncated or surplus
 | 48 | Additional data, private | `ans ...999` LLLVAR | |
 | 49 | Currency code, transaction | `n 3` | ISO 4217 numeric, `840` USD |
 | 52 | PIN data | `b 16 hex` (8 bytes) | masked in the inspector |
+| 53 | Card verification value 2 (CVV2) | `n ..4` (LL) | masked in the inspector; **never stored** by any program here. A simplification: real systems carry the security code in other private elements |
 | 55 | ICC (chip) data | `b ...510 hex` LLLVAR | TLV, see `Tlv` |
 | 70 | Network management information code | `n 3` | `001` sign-on, `002` sign-off, `301` echo |
 | 90 | Original data elements | `n 42` | MTI(4) STAN(6) datetime(10) acquirer(11, zero filled) forwarding(11, zero filled) |
@@ -95,5 +96,5 @@ length above the configured maximum (default 4096) or a stream that ends inside 
 
 ## Sensitive data
 
-PAN (DE 2) and PIN data (DE 52) are masked by every printer in this library unless the caller explicitly asks otherwise.
+PAN (DE 2), PIN data (DE 52) and the security code (DE 53) are masked by every printer in this library unless the caller explicitly asks otherwise.
 PAN display follows the usual rule: at most the first six and last four digits.

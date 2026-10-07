@@ -95,6 +95,18 @@ class ReversalQueueTest {
     }
 
     @Test
+    void aQueuedReversalKeepsNeitherPinDataNorTheSecurityCodeNotEvenEncrypted() {
+        queue(original("000502", "000000000502").set(22, "812").set(25, "59").set(52, "0123456789ABCDEF").set(53, "123"));
+
+        Message kept = store.original(store.due(OWNER, clock.instant(), 10).get(0));
+
+        assertThat(kept.has(52)).isFalse();
+        assertThat(kept.has(53)).isFalse();
+        assertThat(kept.get(2)).as("what a reversal needs is kept").isEqualTo("9999000000000012");
+        assertThat(kept.get(22)).isEqualTo("812");
+    }
+
+    @Test
     void queueingTheSameOriginalTwiceGivesTheSameReversal() {
         UUID first = queue(original("000501", "000000000501"));
         UUID second = queue(original("000501", "000000000501"));

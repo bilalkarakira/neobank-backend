@@ -48,8 +48,8 @@ public final class PendingReversalStore {
     public UUID add(String owner, Message original, BigDecimal amount, String reason, Instant now, Duration deadline,
             UUID acqTransactionId) {
         UUID id = UUID.randomUUID();
-        // a reversal never needs PIN data, so none is kept, not even encrypted
-        Message withoutPin = original.copyWithMti(original.mti()).remove(52);
+        // a reversal never needs PIN data or the security code, so none is kept, not even encrypted
+        Message withoutPin = original.copyWithMti(original.mti()).remove(52).remove(53);
         byte[] ciphertext = vault.encrypt(packager.pack(withoutPin), id.toString());
         String sql = """
                 insert into pending_reversals (id, owner, stan, rrn, masked_pan, amount, request_ciphertext, status, attempts,

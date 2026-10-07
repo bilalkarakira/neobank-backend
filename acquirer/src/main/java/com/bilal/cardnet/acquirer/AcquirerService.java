@@ -46,6 +46,10 @@ public final class AcquirerService {
     }
 
     /** What the terminal sends. {@code pin} may be null (no PIN entered); {@code expiry} is MM/YY as printed on the card. */
+    /** An online payment: no card in a terminal, so no PIN; the security code printed on the card instead. */
+    public record OnlineRequest(String pan, String expiry, String cvv, String amount, String merchantId) {
+    }
+
     /** A request for more on a payment already approved (a pump that keeps filling): the extra amount only. */
     public record IncreaseRequest(UUID paymentId, String amount) {
     }
@@ -66,6 +70,7 @@ public final class AcquirerService {
     private static final Pattern EXPIRY = Pattern.compile("(0[1-9]|1[0-2])/(\\d{2})");
     private static final Pattern AMOUNT = Pattern.compile("\\d{1,7}(\\.\\d{1,2})?");
     private static final Pattern PIN = Pattern.compile("\\d{4,12}");
+    private static final Pattern CVV = Pattern.compile("\\d{3,4}");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HHmmss").withZone(ZoneOffset.UTC);
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMdd").withZone(ZoneOffset.UTC);
 
@@ -129,7 +134,33 @@ public final class AcquirerService {
             throw new BadRequestException("A PIN is 4 to 12 digits.");
         }
 
-        return authorize(merchant, pan, expiry, amountText, pin, "000000");
+        return authorize(merchant, pan, expiry, amountText, pin, "000000", "051", "00", null);
+    }
+
+    /**
+     * An online payment (card not present): DE 22 812 and DE 25 59, no PIN, and the security code in DE 53. The code is only put in the
+     * message that is sent: it is not kept in the payment record or in a queued reversal, and the console never shows it.
+     */
+    public Result payOnline(OnlineRequest request) {
+        AcquirerConfig.Merchant merchant = config.merchants.stream().filter(m -> m.id().equals(request.merchantId())).findFirst()
+                .orElseThrow(() -> new BadRequestException("Choose one of the listed shops."));
+        String pan = clean(request.pan());
+        if (!PAN.matcher(pan).matches()) {
+            throw new BadRequestException("The card number must be 13 to 19 digits.");
+        }
+        java.util.regex.Matcher expiry = EXPIRY.matcher(request.expiry() == null ? "" : request.expiry().strip());
+        if (!expiry.matches()) {
+            throw new BadRequestException("The expiry date must look like MM/YY, for example 10/29.");
+        }
+        String cvv = request.cvv() == null ? "" : request.cvv().strip();
+        if (!CVV.matcher(cvv).matches()) {
+            throw new BadRequestException("The security code is the 3 or 4 digits on the card.");
+        }
+        String amountText = request.amount() == null ? "" : request.amount().strip();
+        if (!AMOUNT.matcher(amountText).matches() || new BigDecimal(amountText).signum() <= 0) {
+            throw new BadRequestException("The amount must be a positive number with at most two decimals, for example 12.50.");
+        }
+        return authorize(merchant, pan, expiry, amountText, null, "000000", "812", "59", cvv);
     }
 
     /**
@@ -160,21 +191,28 @@ public final class AcquirerService {
         if (amount.compareTo(config.atmMax) > 0) {
             throw new BadRequestException("The machine pays at most " + config.atmMax.toPlainString() + " at a time.");
         }
-        return authorize(config.atm, pan, expiry, amount.setScale(2).toPlainString(), pin, "010000");
+        return authorize(config.atm, pan, expiry, amount.setScale(2).toPlainString(), pin, "010000", "051", "00", null);
     }
 
     private Result authorize(AcquirerConfig.Merchant merchant, String pan, java.util.regex.Matcher expiry, String amountText, String pin,
-            String processingCode) {
+            String processingCode, String entryMode, String conditionCode, String cvv) {
         Instant now = clock.instant();
         UUID id = UUID.randomUUID();
         String stan = Sequences.nextStan(ds);
         String rrn = Sequences.nextRrn(ds);
         Message payment = Message.of("0100").set(2, pan).set(3, processingCode).set(4, Messages.de4(new BigDecimal(amountText)))
                 .set(7, Messages.de7(now)).set(11, stan).set(12, TIME.format(now)).set(13, DATE.format(now))
-                .set(14, expiry.group(2) + expiry.group(1)).set(18, merchant.mcc()).set(22, "051").set(25, "00")
+                .set(14, expiry.group(2) + expiry.group(1)).set(18, merchant.mcc()).set(22, entryMode).set(25, conditionCode)
                 .set(32, config.acquirerId).set(37, rrn).set(41, "%-8s".formatted(config.terminalId)).set(42, "%-15s".formatted(merchant.id()))
                 .set(43, "%-40s".formatted(merchant.name())).set(49, "840");
-        Message sent = pin == null ? payment : payment.copyWithMti("0100").set(52, PinBlock.encode(pin, pan));
+        // PIN data and the security code are in the message that is sent only: the stored copy and any queued reversal never have them
+        Message sent = payment.copyWithMti("0100");
+        if (pin != null) {
+            sent.set(52, PinBlock.encode(pin, pan));
+        }
+        if (cvv != null) {
+            sent.set(53, cvv);
+        }
 
         store.insert(id, payment, merchant.name(), pin != null, now);
         Optional<Message> answer = client.exchange(sent, config.networkTimeout);

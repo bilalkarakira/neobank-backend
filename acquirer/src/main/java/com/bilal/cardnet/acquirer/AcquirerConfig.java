@@ -59,6 +59,8 @@ public final class AcquirerConfig {
      */
     public String demoCardPan = "9999000000000012";
     public String demoCardPin = "4321";
+    /** The security code (CVV2) of the published demo card, for online payments (a test value, not a secret). */
+    public String demoCardCvv = "123";
     public String demoCardExpiry = threeYearsAhead();
 
     /** The expiry NeoBank gives a card issued this month: three years ahead, written MM/YY as it is printed on the card. */
@@ -80,6 +82,7 @@ public final class AcquirerConfig {
         c.fileSecret = env("CARDNET_FILE_KEY", c.fileSecret);
         c.demoCardPan = env("CARDNET_DEMO_CARD_PAN", c.demoCardPan);
         c.demoCardPin = env("CARDNET_DEMO_CARD_PIN", c.demoCardPin);
+        c.demoCardCvv = env("CARDNET_DEMO_CARD_CVV", c.demoCardCvv);
         c.demoCardExpiry = env("CARDNET_DEMO_CARD_EXPIRY", c.demoCardExpiry);
         return c;
     }

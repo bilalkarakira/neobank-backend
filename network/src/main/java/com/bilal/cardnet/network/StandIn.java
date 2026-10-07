@@ -21,6 +21,9 @@ public final class StandIn {
 
     /** @param usedToday what this card has already been approved for by stand-in today (UTC) */
     public static Decision decide(Message request, BigDecimal usedToday, NetworkConfig config) {
+        if (request.has(53) || (request.has(22) && request.get(22).startsWith("81"))) {
+            return no("an online payment needs the bank to check the security code");
+        }
         if (request.has(90)) {
             return no("an increment adds to an authorization only the bank knows");
         }
