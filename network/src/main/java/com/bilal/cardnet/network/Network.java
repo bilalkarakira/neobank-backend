@@ -30,6 +30,7 @@ public final class Network implements AutoCloseable {
     private final NetworkControl control;
     private final ClearingProcessor clearing;
     private final SettlementService settlement;
+    private final DisputeProcessor disputes;
     private final com.bilal.cardnet.shared.PeriodicTask clearingTask;
 
     private Network(NetworkConfig config, DataSource ds, PanVault vault, Clock clock) {
@@ -47,9 +48,11 @@ public final class Network implements AutoCloseable {
         this.server = new NetworkServer(config, router, chaos);
         this.clearing = config.clearingDir == null ? null : new ClearingProcessor(config, ds, vault, clock);
         this.settlement = config.clearingDir == null ? null : new SettlementService(config, ds, clock);
+        this.disputes = config.clearingDir == null ? null : new DisputeProcessor(config, ds, vault, clock);
         this.control = new NetworkControl(config.bindAddress, config.controlPort, this::status, chaos, settlement);
         this.clearingTask = clearing == null ? null : new com.bilal.cardnet.shared.PeriodicTask("network-clearing", () -> {
             clearing.tick();
+            disputes.tick();
             settlement.writePending();
         });
     }
@@ -87,6 +90,7 @@ public final class Network implements AutoCloseable {
         if (clearing != null) {
             map.put("clearingFilesWaiting", clearing.waiting());
             map.put("unsettledItems", settlement.unsettledItems());
+            map.put("disputeFilesWaiting", disputes.waiting());
         }
         map.put("chaos", chaos.toMap());
         return map;
@@ -123,6 +127,11 @@ public final class Network implements AutoCloseable {
     /** The clearing processor, or null when clearing is switched off (no clearing folder configured). */
     public ClearingProcessor clearing() {
         return clearing;
+    }
+
+    /** The dispute processor, or null when clearing is switched off. */
+    public DisputeProcessor disputes() {
+        return disputes;
     }
 
     /** The settlement service, or null when clearing is switched off. */

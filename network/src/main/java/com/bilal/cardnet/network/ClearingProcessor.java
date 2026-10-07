@@ -188,11 +188,11 @@ public final class ClearingProcessor {
                     });
                     int outRecord = ++outCount.get(out)[0];
                     outTotal.get(out)[0] += Long.parseLong(p.message().get(4));
-                    insertItem(c, fileRow, p, out, outRecord);
+                    insertItem(c, fileRow, file, p, out, outRecord);
                 }
                 for (Pending p : pending) {
                     if (p.refusal() != null) {
-                        insertItem(c, fileRow, p, null, 0);
+                        insertItem(c, fileRow, file, p, null, 0);
                     }
                 }
                 for (UUID out : outCount.keySet()) {
@@ -221,7 +221,7 @@ public final class ClearingProcessor {
                 .orElseGet(() -> new Pending(number, m, "NO_ROUTE: no issuer for this card number (15)", null));
     }
 
-    private void insertItem(Connection c, UUID fileRow, Pending p, UUID outfile, int outRecord) {
+    private void insertItem(Connection c, UUID fileRow, ClearingFile file, Pending p, UUID outfile, int outRecord) {
         Message m = p.message();
         boolean refund = ClearingFile.REFUND.equals(m.get(3));
         BigDecimal amount = Messages.amount(m);
@@ -229,12 +229,13 @@ public final class ClearingProcessor {
         UUID id = UUID.randomUUID();
         byte[] cipher = p.refusal() == null ? vault.encrypt(packager.pack(m), id.toString()) : null;
         exec(c, "insert into net_clearing_items (id, file_row, record_no, outfile, out_record, kind, stan, rrn, masked_pan, amount, merchant_discount, "
-                + "interchange, scheme_fee_acquirer, scheme_fee_issuer, result, reason, presentment_ciphertext) "
-                + "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", id, fileRow, p.record(), outfile, outfile == null ? null : outRecord,
+                + "interchange, scheme_fee_acquirer, scheme_fee_issuer, result, reason, presentment_ciphertext, issuer_prefix, acquirer_id, business_date) "
+                + "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", id, fileRow, p.record(), outfile, outfile == null ? null : outRecord,
                 refund ? "REFUND" : "PURCHASE", m.get(11), m.get(37), Pans.mask(m.get(2)), amount,
                 fees == null ? BigDecimal.ZERO : fees.merchantDiscount(), fees == null ? BigDecimal.ZERO : fees.interchange(),
                 fees == null ? BigDecimal.ZERO : fees.schemeFeeAcquirer(), fees == null ? BigDecimal.ZERO : fees.schemeFeeIssuer(),
-                p.refusal() == null ? null : "REFUSED", p.refusal() == null ? null : p.refusal(), cipher);
+                p.refusal() == null ? null : "REFUSED", p.refusal() == null ? null : p.refusal(), cipher,
+                p.route() == null ? null : p.route().prefix(), file.sender(), java.sql.Date.valueOf(file.businessDate()));
     }
 
     private void insertRejected(String name, String fileId, String sender, String reason) {

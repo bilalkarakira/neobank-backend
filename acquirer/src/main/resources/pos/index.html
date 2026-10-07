@@ -106,6 +106,15 @@
       <tbody id="batches"><tr><td colspan="6" class="muted">No clearing files yet.</td></tr></tbody>
     </table></div>
   </section>
+
+  <section class="wide" aria-labelledby="disp-h">
+    <h2 id="disp-h">Chargebacks</h2>
+    <p class="muted" style="margin:0 0 8px">When a cardholder disputes a payment, their bank files a chargeback and the network passes it to us. The money has already been taken back at settlement. If you have proof the sale was fine (a signed receipt, a delivery note), answer it once with a note; it goes to the cardholder's bank, and if it holds the money comes back to you.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Received</th><th>Shop</th><th>Card</th><th style="text-align:right">Charged back (USD)</th><th>Reason</th><th>Status</th><th>Answer</th></tr></thead>
+      <tbody id="disputes"><tr><td colspan="7" class="muted">No chargebacks.</td></tr></tbody>
+    </table></div>
+  </section>
 </main>
 <script>
 (function () {
@@ -199,6 +208,47 @@
     });
   }
 
+  function loadDisputes() {
+    // do not redraw the table under someone who is writing a note in it
+    if (document.activeElement && $('disputes').contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return Promise.resolve();
+    return api('GET', '/api/disputes').then(function (r) {
+      var body = $('disputes'); clear(body);
+      var rows = (r.json.disputes || []);
+      if (!rows.length) { var tr = el('tr'); var td = el('td', 'muted', 'No chargebacks.'); td.colSpan = 7; tr.appendChild(td); body.appendChild(tr); return; }
+      rows.forEach(function (d) {
+        var tr = el('tr');
+        tr.appendChild(el('td', 'mono', new Date(d.receivedAt).toLocaleTimeString()));
+        tr.appendChild(el('td', null, d.merchant));
+        tr.appendChild(el('td', 'mono', d.card));
+        tr.appendChild(el('td', 'num', d.amount + (d.amount !== d.paymentAmount ? ' of ' + d.paymentAmount : '')));
+        tr.appendChild(el('td', 'muted', d.reason.replace(/_/g, ' ').toLowerCase() + (d.note ? ': ' + d.note : '')));
+        var s = el('td'); s.appendChild(el('span', 'chip ' + d.status, d.status.toLowerCase())); tr.appendChild(s);
+        var a = el('td');
+        if (d.status === 'RECEIVED') {
+          var w = el('div', 'inline');
+          var note = el('input'); note.placeholder = 'evidence for the bank'; note.maxLength = 200; note.setAttribute('aria-label', 'Evidence for the bank');
+          var rb = el('button', null, 'Represent');
+          rb.addEventListener('click', function () { represent(d.id, note.value, rb); });
+          w.appendChild(note); w.appendChild(rb); a.appendChild(w);
+        } else {
+          a.appendChild(el('div', null, d.representmentNote || ''));
+          a.appendChild(el('div', 'muted', d.answer ? 'bank answered: ' + d.answer.toLowerCase() : 'sent, waiting for the network'));
+        }
+        tr.appendChild(a); body.appendChild(tr);
+      });
+    });
+  }
+
+  function represent(id, note, button) {
+    button.disabled = true;
+    api('POST', '/api/represent', { id: id, note: note }).then(function (r) {
+      if (r.status === 200) showBanner('info', 'Your answer was sent to the network for the cardholder\u2019s bank.');
+      else showBanner('error', r.json.error || 'That could not be done.');
+      button.disabled = false;
+      loadDisputes();
+    });
+  }
+
   function loadNetwork() {
     return api('GET', '/api/network').then(function (r) {
       var box = $('net'); clear(box);
@@ -278,8 +328,8 @@
     });
     $('use-demo').click();
     if (!config.clearing) { $('close-day').disabled = true; $('day-msg').appendChild(el('div', 'banner error', 'Clearing is switched off: no clearing folder is configured.')); }
-    loadTransactions(); loadNetwork(); loadBatches();
-    setInterval(function () { loadTransactions(); loadNetwork(); loadBatches(); }, 3000);
+    loadTransactions(); loadNetwork(); loadBatches(); loadDisputes();
+    setInterval(function () { loadTransactions(); loadNetwork(); loadBatches(); loadDisputes(); }, 3000);
   });
 })();
 </script>

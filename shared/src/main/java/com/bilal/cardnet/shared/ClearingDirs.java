@@ -19,6 +19,7 @@ import java.nio.file.Path;
 public final class ClearingDirs {
 
     public static final String FILE_SUFFIX = ".clr";
+    public static final String DISPUTE_SUFFIX = ".dsp";
     public static final String ACK_SUFFIX = ".ack";
 
     private final Path root;
@@ -70,9 +71,14 @@ public final class ClearingDirs {
         }
     }
 
-    /** "B0001.clr" -> "B0001.ack": the acknowledgement of a file carries its name. */
+    /** "B0001.clr" or "D0001.dsp" -> "B0001.ack" / "D0001.ack": the acknowledgement of a file carries its name. */
     public static String ackName(String fileName) {
-        return (fileName.endsWith(FILE_SUFFIX) ? fileName.substring(0, fileName.length() - FILE_SUFFIX.length()) : fileName) + ACK_SUFFIX;
+        for (String suffix : new String[] {FILE_SUFFIX, DISPUTE_SUFFIX}) {
+            if (fileName.endsWith(suffix)) {
+                return fileName.substring(0, fileName.length() - suffix.length()) + ACK_SUFFIX;
+            }
+        }
+        return fileName + ACK_SUFFIX;
     }
 
     private Path dir(String name) {

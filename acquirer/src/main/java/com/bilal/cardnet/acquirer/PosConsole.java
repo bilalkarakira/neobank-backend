@@ -34,6 +34,8 @@ import java.util.concurrent.Executors;
  * POST /api/refund            {id, amount}  refund all or part of a cleared payment
  * POST /api/close-day         put every approved payment and due refund into one clearing file
  * GET  /api/batches           the clearing files and their status
+ * GET  /api/disputes          the chargebacks the network passed on
+ * POST /api/represent         {id, note}  answer a chargeback with the shop's evidence (once)
  * GET  /api/transactions      the latest payments
  * GET  /api/network           the network's status (proxied)
  * POST /api/network/chaos     the network's chaos switches (proxied)
@@ -47,13 +49,15 @@ public final class PosConsole {
     private final AcquirerConfig config;
     private final AcquirerService service;
     private final AcquirerClearing clearing;
+    private final AcquirerDisputes disputes;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
     private HttpServer server;
 
-    public PosConsole(AcquirerConfig config, AcquirerService service, AcquirerClearing clearing) {
+    public PosConsole(AcquirerConfig config, AcquirerService service, AcquirerClearing clearing, AcquirerDisputes disputes) {
         this.config = config;
         this.service = service;
         this.clearing = clearing;
+        this.disputes = disputes;
     }
 
     public synchronized void start() throws IOException {
@@ -96,6 +100,8 @@ public final class PosConsole {
                 case "/api/refund" -> only(exchange, method, "POST", () -> json(exchange, 200, refund(Json.parseFlat(body(exchange)))));
                 case "/api/close-day" -> only(exchange, method, "POST", () -> json(exchange, 200, closeDay()));
                 case "/api/batches" -> only(exchange, method, "GET", () -> json(exchange, 200, batches()));
+                case "/api/disputes" -> only(exchange, method, "GET", () -> json(exchange, 200, disputeList()));
+                case "/api/represent" -> only(exchange, method, "POST", () -> json(exchange, 200, represent(Json.parseFlat(body(exchange)))));
                 case "/api/network" -> only(exchange, method, "GET", () -> proxy(exchange, "GET", "/status", null));
                 case "/api/network/chaos" -> only(exchange, method, "POST", () -> proxy(exchange, "POST", "/chaos", body(exchange)));
                 default -> json(exchange, 404, error("not found"));
@@ -217,6 +223,40 @@ public final class PosConsole {
         map.put("batch", b);
         map.put("message", "Sent " + batch.get().count() + " item(s) to the network in file " + batch.get().fileName() + ".");
         return map;
+    }
+
+    private Map<String, Object> disputeList() {
+        Map<String, Object> map = Json.object();
+        List<Object> rows = Json.list();
+        for (AcquirerDisputes.Row d : disputes.list(20)) {
+            rows.add(disputeMap(d));
+        }
+        map.put("disputes", rows);
+        return map;
+    }
+
+    private Map<String, Object> represent(Map<String, Object> in) {
+        if (!disputes.enabled()) {
+            throw new AcquirerService.ConflictException("Clearing is switched off, so there are no chargebacks to answer.");
+        }
+        return disputeMap(disputes.represent(id(in), text(in, "note")));
+    }
+
+    private static Map<String, Object> disputeMap(AcquirerDisputes.Row d) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("id", d.id().toString());
+        r.put("merchant", d.merchant());
+        r.put("card", d.maskedPan());
+        r.put("paymentAmount", d.paymentAmount());
+        r.put("amount", d.amount());
+        r.put("reason", d.reason());
+        r.put("note", d.note());
+        r.put("status", d.status());
+        r.put("receivedAt", d.receivedAt().toString());
+        r.put("representmentNote", d.representmentNote());
+        r.put("representedAt", d.representedAt() == null ? null : d.representedAt().toString());
+        r.put("answer", d.representmentAnswer());
+        return r;
     }
 
     private Map<String, Object> batches() {

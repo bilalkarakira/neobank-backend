@@ -148,6 +148,17 @@ final class AcqHarness implements AutoCloseable {
         }
     }
 
+    void exec(String sql, Object... args) {
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            for (int i = 0; i < args.length; i++) {
+                ps.setObject(i + 1, args[i]);
+            }
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     int count(String sql, Object... args) {
         return Integer.parseInt(scalar(sql, args));
     }

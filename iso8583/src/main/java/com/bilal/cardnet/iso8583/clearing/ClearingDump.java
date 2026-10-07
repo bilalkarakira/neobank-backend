@@ -45,7 +45,7 @@ public final class ClearingDump {
                 .append(" minor units\n");
         int number = 1;
         for (Message m : file.presentments()) {
-            out.append("\n#").append(number++).append('\n').append(Inspector.format(m));
+            out.append("\n#").append(number++).append("  ").append(ClearingFile.kindOf(m).name().toLowerCase()).append('\n').append(Inspector.format(m));
         }
         return out.toString();
     }

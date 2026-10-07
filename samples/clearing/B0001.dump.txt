@@ -1,7 +1,7 @@
 File B0001  business date 2026-10-06  123456 -> NET  USD
 2 presentment(s), control total 3375 minor units
 
-#1
+#1  purchase
 MTI 1240  (ISO 8583:1993, Financial, Notification, Acquirer)
 Data elements present: [2, 3, 4, 7, 11, 12, 13, 14, 18, 32, 37, 38, 41, 42, 43, 49]
   DE   2  Primary account number               999900******0012
@@ -21,7 +21,7 @@ Data elements present: [2, 3, 4, 7, 11, 12, 13, 14, 18, 32, 37, 38, 41, 42, 43, 
   DE  43  Card acceptor name/location          Corner Cafe                             
   DE  49  Currency code, transaction           840
 
-#2
+#2  refund
 MTI 1240  (ISO 8583:1993, Financial, Notification, Acquirer)
 Data elements present: [2, 3, 4, 7, 11, 12, 13, 14, 18, 32, 37, 41, 42, 43, 49]
   DE   2  Primary account number               999900******0012

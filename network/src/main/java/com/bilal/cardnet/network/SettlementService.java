@@ -28,7 +28,8 @@ import java.util.UUID;
  * movement per participant, labels it with a value date (T+1 business day) and writes a CSV and a camt.053-style XML statement for
  * each participant. For one cleared purchase X with interchange I and scheme fees S (acquirer) and T (issuer):
  * the issuer pays X - I + T, the acquirer receives X - I - S, the network receives S + T; the three add up to zero. A refund is
- * the same with every sign reversed (the fees of a refund are stored negative). A run that does not add up to zero is refused.
+ * the same with every sign reversed (the fees of a refund are stored negative); a chargeback counts as a refund and a representment as a
+ * purchase. A run that does not add up to zero is refused.
  *
  * <p>Only items the issuer posted count (POSTED, FORCE_POSTED, REFUND_POSTED); items already settled by an earlier run, duplicates,
  * rejected and refused items do not. The run row, its lines and the claim on the items are ONE database transaction; the files
@@ -55,12 +56,12 @@ public final class SettlementService {
         this.dirs = new ClearingDirs(config.clearingDir);
     }
 
-    private static final String ELIGIBLE = "i.settlement_id is null and i.result in ('POSTED', 'FORCE_POSTED', 'REFUND_POSTED')";
+    private static final String ELIGIBLE = "i.settlement_id is null and i.result in ('POSTED', 'FORCE_POSTED', 'REFUND_POSTED', 'CHARGEBACK_ACCEPTED', 'REPRESENTMENT_ACCEPTED')";
 
     /** The oldest business date that still has cleared items nobody has settled, if any. */
     public Optional<LocalDate> oldestUnsettled() {
         try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(
-                "select min(f.business_date) from net_clearing_items i join net_clearing_files f on f.id = i.file_row where " + ELIGIBLE);
+                "select min(i.business_date) from net_clearing_items i where " + ELIGIBLE);
                 ResultSet rs = ps.executeQuery()) {
             rs.next();
             java.sql.Date date = rs.getDate(1);
@@ -102,15 +103,14 @@ public final class SettlementService {
                 }
                 List<Item> items = new ArrayList<>();
                 try (PreparedStatement ps = c.prepareStatement("""
-                        select i.id, i.kind, i.amount, i.interchange, i.scheme_fee_acquirer, i.scheme_fee_issuer, f.sender, o.issuer_prefix
-                        from net_clearing_items i join net_clearing_files f on f.id = i.file_row
-                        join net_clearing_outfiles o on o.id = i.outfile
-                        where %s and f.business_date = ? order by i.id for update of i
+                        select i.id, i.kind, i.amount, i.interchange, i.scheme_fee_acquirer, i.scheme_fee_issuer, i.acquirer_id, i.issuer_prefix
+                        from net_clearing_items i
+                        where %s and i.business_date = ? order by i.id for update of i
                         """.formatted(ELIGIBLE))) {
                     ps.setObject(1, businessDate);
                     try (ResultSet rs = ps.executeQuery()) {
                         while (rs.next()) {
-                            items.add(new Item(rs.getObject(1, UUID.class), "REFUND".equals(rs.getString(2)), rs.getBigDecimal(3),
+                            items.add(new Item(rs.getObject(1, UUID.class), "REFUND".equals(rs.getString(2)) || "CHARGEBACK".equals(rs.getString(2)), rs.getBigDecimal(3),
                                     rs.getBigDecimal(4), rs.getBigDecimal(5), rs.getBigDecimal(6), rs.getString(7), rs.getString(8)));
                         }
                     }

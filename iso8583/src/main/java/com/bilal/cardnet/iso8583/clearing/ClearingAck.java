@@ -36,10 +36,10 @@ public record ClearingAck(String fileId, Status status, String reason, List<Item
         }
     }
 
-    /** Results that mean the item is done: the issuer posted it, or had already captured it. */
-    public static final Set<String> CLEARED = Set.of("POSTED", "FORCE_POSTED", "REFUND_POSTED", "DUPLICATE");
+    /** Results that mean the item is done: the issuer posted it, or had already captured it, or a dispute item was accepted. */
+    public static final Set<String> CLEARED = Set.of("POSTED", "FORCE_POSTED", "REFUND_POSTED", "DUPLICATE", "CHARGEBACK_ACCEPTED", "REPRESENTMENT_ACCEPTED");
 
-    private static final Pattern RESULT = Pattern.compile("[A-Z_]{1,20}");
+    private static final Pattern RESULT = Pattern.compile("[A-Z_]{1,24}");
     private static final int MAX_REASON = 120;
 
     public ClearingAck {

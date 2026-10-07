@@ -70,7 +70,9 @@ public final class ClearingFileCodec {
 
     /** The bytes to store under {@code fileName}. */
     public byte[] encode(ClearingFile file, String fileName) {
-        return seal(plainText(file), fileName);
+        byte[] plain = plainText(file);
+        ClearingFile.requireKindsMatchName(file.presentments(), fileName);
+        return seal(plain, fileName);
     }
 
     /** Writes through a temporary name and renames, so a reader never sees half a file. Returns the final path. */
@@ -137,7 +139,9 @@ public final class ClearingFileCodec {
 
     /** @throws ClearingFileException the first thing wrong with the file, with a stable reason */
     public ClearingFile decode(byte[] bytes, String fileName) {
-        return parse(open(bytes, fileName));
+        ClearingFile file = parse(open(bytes, fileName));
+        ClearingFile.requireKindsMatchName(file.presentments(), fileName);
+        return file;
     }
 
     ClearingFile parse(byte[] plain) {

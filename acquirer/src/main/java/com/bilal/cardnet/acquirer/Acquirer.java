@@ -13,11 +13,15 @@ public final class Acquirer implements AutoCloseable {
     private final AcquirerService service;
     private final AcquirerClearing clearing;
     private final com.bilal.cardnet.shared.PeriodicTask clearingTask;
+    private final AcquirerDisputes disputes;
+    private final com.bilal.cardnet.shared.PeriodicTask disputeTask;
     private final PosConsole console;
 
-    private Acquirer(AcquirerService service, AcquirerClearing clearing, PosConsole console) {
+    private Acquirer(AcquirerService service, AcquirerClearing clearing, AcquirerDisputes disputes, PosConsole console) {
         this.service = service;
         this.clearing = clearing;
+        this.disputes = disputes;
+        this.disputeTask = new com.bilal.cardnet.shared.PeriodicTask("acquirer-disputes", disputes::tick);
         this.clearingTask = new com.bilal.cardnet.shared.PeriodicTask("acquirer-clearing", clearing::processAcknowledgements);
         this.console = console;
     }
@@ -29,12 +33,14 @@ public final class Acquirer implements AutoCloseable {
                 new NetworkClient(config.networkHost, config.networkPort, clock), clock);
         AcquirerClearing clearing = new AcquirerClearing(config, ds, store, clock);
         clearing.repairUnwrittenBatches();
-        PosConsole console = new PosConsole(config, service, clearing);
+        AcquirerDisputes disputes = new AcquirerDisputes(config, ds, store, clock);
+        PosConsole console = new PosConsole(config, service, clearing, disputes);
         service.start();
         console.start();
-        Acquirer acquirer = new Acquirer(service, clearing, console);
+        Acquirer acquirer = new Acquirer(service, clearing, disputes, console);
         if (clearing.enabled()) {
             acquirer.clearingTask.start(config.clearingPoll);
+            acquirer.disputeTask.start(config.clearingPoll);
         }
         return acquirer;
     }
@@ -45,6 +51,10 @@ public final class Acquirer implements AutoCloseable {
 
     public AcquirerClearing clearing() {
         return clearing;
+    }
+
+    public AcquirerDisputes disputes() {
+        return disputes;
     }
 
     /** The address the POS console is bound to. */
@@ -59,6 +69,7 @@ public final class Acquirer implements AutoCloseable {
     @Override
     public void close() {
         clearingTask.stop();
+        disputeTask.stop();
         console.stop();
         service.stop();
     }
