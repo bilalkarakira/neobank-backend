@@ -79,6 +79,28 @@ class AcquirerOnlineTest {
     }
 
     @Test
+    void theStoreKeepsNoSecurityCodeOrPinEvenIfAskedTo() throws Exception {
+        try (AcqHarness h = new AcqHarness()) {
+            UUID paymentId = h.payApproved("20.00");
+            UUID directId = UUID.randomUUID();
+            Message direct = h.issuer.received("0100").get(0).copyWithMti("0100").set(11, "000778").set(37, "000000000778").set(53, CVV).set(52, "0123456789ABCDEF");
+            h.service().store().insert(directId, direct, "Corner Cafe", true, java.time.Instant.now());
+            assertThat(h.service().store().request(directId).has(53)).as("a payment record").isFalse();
+            assertThat(h.service().store().request(directId).has(52)).isFalse();
+
+            Message addition = h.issuer.received("0100").get(0).copyWithMti("0100").set(11, "000777").set(37, "000000000777").set(53, CVV).set(52, "0123456789ABCDEF");
+
+            UUID incrementId = UUID.randomUUID();
+            h.service().store().insertIncrement(incrementId, paymentId, addition, java.time.Instant.now());
+
+            Message kept = h.service().store().incrementRequest(incrementId);
+            assertThat(kept.has(53)).isFalse();
+            assertThat(kept.has(52)).isFalse();
+            assertThat(kept.get(11)).as("the rest is kept").isEqualTo("000777");
+        }
+    }
+
+    @Test
     void whatTheConsoleShowsHidesTheCodeByItsPlace() throws Exception {
         try (AcqHarness h = new AcqHarness()) {
             AcquirerService.Result result = h.service().payOnline(online("19.99", CVV));
