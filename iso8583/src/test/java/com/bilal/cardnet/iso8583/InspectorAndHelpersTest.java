@@ -18,6 +18,18 @@ class InspectorAndHelpersTest {
                 .set(41, "TERM0001").set(52, PIN_BLOCK);
     }
 
+    // ---- inspector: the same text on every platform ---------------------------------------------------------------
+
+    @Test
+    void theReportUsesOnlyLineFeedsWhateverThePlatformIs() {
+        // the checked-in samples are compared with this text byte for byte, on Windows, Linux and the build server alike
+        String report = Inspector.format(purchase());
+
+        assertThat(report).doesNotContain("\r");
+        assertThat(report.lines().count()).isGreaterThan(3);
+        assertThat(report).endsWith("\n");
+    }
+
     // ---- inspector: nothing sensitive leaks ---------------------------------------------------------------------
 
     @Test

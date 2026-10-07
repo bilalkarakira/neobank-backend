@@ -38,7 +38,8 @@ public final class Inspector {
             String value = entry.getValue();
             boolean masked = def != null && def.sensitive() && !showSensitive;
             String shown = masked ? (number == 2 ? maskPan(value) : "*".repeat(value.length())) : value;
-            out.append(String.format("  DE %3d  %-36s %s%n", number, name, shown));
+            // always "\n", whatever the platform: the samples and the tests compare this text byte for byte
+            out.append(String.format("  DE %3d  %-36s %s\n", number, name, shown));
             if (number == 55 && !masked) {
                 try {
                     appendTlv(out, Tlv.parse(value), 6);
