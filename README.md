@@ -220,6 +220,21 @@ are decoded by a test on every build, so they cannot rot. ISO 8583 notes: `neoba
 
 Beyond the unit tests, the important behaviours were **mutation-checked**: break the code on purpose and confirm that a test fails.
 
+## Continuous integration
+
+Each repository has a workflow in `.github/workflows/ci.yml` that runs on every push and pull request:
+
+| Repository | What the workflow does |
+|---|---|
+| neobank-cardnet | `./mvnw clean verify`: every module and every test (the tests start a real PostgreSQL in Docker) |
+| neobank-backend | checks out neobank-cardnet, installs its codec, then `./mvnw clean verify` |
+| neobank-frontend | `npm ci`, the unit tests, the production build |
+| neobank-demo | the scenario runner compiles and both compose files are valid; **and** (on the default branch, on demand and every night) the four repositories are checked out side by side, the stack is built with `docker compose up --build` and `scenario/Scenario.java` plays a whole card day against it |
+
+The workflows assume the four repositories live under the same GitHub owner with these names and can be read by the workflow
+(public, or give `actions/checkout` a token). The workflows have been run only as their individual commands, on a clean export of
+the committed code on Windows with JDK 27 (the code is compiled for Java 21); they have not run on GitHub yet.
+
 ## More
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the pieces, the ports, the files, the databases, and the main design decisions
