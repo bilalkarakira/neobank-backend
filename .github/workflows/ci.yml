@@ -1,0 +1,54 @@
+# Builds NeoBank (the issuing bank) and runs all its tests against a real PostgreSQL in Docker (Testcontainers).
+#
+# NeoBank uses the ISO 8583 codec of the card network simulation, so the sibling repository neobank-cardnet is checked out
+# from the same owner (it must be readable by this workflow: public, or give actions/checkout a token) and its codec is
+# installed first. This is the same step as "run mvnw install there first" in the README.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: neobank-backend
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/neobank-cardnet
+          path: neobank-cardnet
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            neobank-backend/pom.xml
+            neobank-cardnet/pom.xml
+
+      - run: chmod +x neobank-cardnet/mvnw neobank-backend/mvnw
+
+      - name: Install the card network codec
+        working-directory: neobank-cardnet
+        run: ./mvnw -B -ntp -pl iso8583 -am install -DskipTests
+
+      - name: Build and test NeoBank
+        working-directory: neobank-backend
+        run: ./mvnw -B -ntp clean verify
+
+      - name: Keep the test reports when something failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: neobank-backend/target/surefire-reports/
+          retention-days: 7
