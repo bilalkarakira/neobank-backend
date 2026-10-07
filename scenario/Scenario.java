@@ -136,6 +136,30 @@ public class Scenario {
                 !wrongOnline.contains("\"" + cvv + "\"") && !rightOnline.contains(": " + cvv) && !contains(onlineActivity, "cvv"));
         System.out.println("   (the wrong code counted like a wrong PIN: the next payment with the PIN resets the counter)\n");
 
+        step("9c. An online payment above 30.00 needs the customer's approval (a simulation of 3-D Secure: the bank asks, the customer answers in the app)");
+        String big = post(POS + "/api/pay-online", onlineBody("80.00", cvv));
+        String reference = field(big, "challenge");
+        expect("the bank declines with 1A and a reference for the customer to approve", "DECLINED".equals(field(big, "status")) && "1A".equals(field(big, "responseCode")) && reference != null);
+        String waiting = get(BANK + "/api/cards/authentications", demoToken);
+        expect("the customer sees the request in the app (shop, amount and the same reference)",
+                contains(waiting, "\"reference\":\"" + reference + "\"") && contains(waiting, "\"amount\":\"80.00\"") && contains(waiting, "Corner Cafe"));
+        String early = post(POS + "/api/pay-online", onlineBody("80.00", cvv, reference));
+        expect("trying again before the customer answered is asked again (1A, another reference)",
+                "1A".equals(field(early, "responseCode")) && field(early, "challenge") != null && !reference.equals(field(early, "challenge")));
+        expect("the customer approves: no content", answer(waiting, reference, "approve", demoToken) == 204);
+        String paid = post(POS + "/api/pay-online", onlineBody("80.00", cvv, reference));
+        expect("the shop tries again with the reference: approved", "APPROVED".equals(field(paid, "status")));
+        String reused = post(POS + "/api/pay-online", onlineBody("80.00", cvv, reference));
+        expect("the same approval cannot pay twice (1A again, a new reference)",
+                "1A".equals(field(reused, "responseCode")) && field(reused, "challenge") != null && !reference.equals(field(reused, "challenge")));
+        String other = post(POS + "/api/pay-online", onlineBody("80.00", cvv));
+        String otherRef = field(other, "challenge");
+        String waitingAgain = get(BANK + "/api/cards/authentications", demoToken);
+        expect("the customer rejects the next one: no content", otherRef != null && answer(waitingAgain, otherRef, "reject", demoToken) == 204);
+        String refused = post(POS + "/api/pay-online", onlineBody("80.00", cvv, otherRef));
+        expect("a rejected request is refused for good (05)", "DECLINED".equals(field(refused, "status")) && "05".equals(field(refused, "responseCode")));
+        expect("an approval for 80.00 does not pay 80.01", "1A".equals(field(post(POS + "/api/pay-online", onlineBody("80.01", cvv, reference)), "responseCode")));
+
         step("10. A fuel pump: 50.00 is authorized first, the pump asks for 25.00 more, and an addition that is too much is refused");
         String pump = pay("50.00", GAS, pin);
         expect("the pump's first authorization is approved", "APPROVED".equals(field(pump, "status")));
@@ -157,8 +181,8 @@ public class Scenario {
         expect("a clearing file was sent", batchFile != null);
         waitUntil("the network accepted the file", () -> "ACCEPTED".equals(batchStatus(batchFile)), 60);
         expect("the network accepted it (and NeoBank answered for every item)", "ACCEPTED".equals(batchStatus(batchFile)));
-        waitUntil("NeoBank posted the cleared payments", () -> captured() >= postedBefore + 7, 60);
-        expect("NeoBank POSTED the cleared payments (25.00, 5.00, 46.00, the stand-in 20.00, the 100.00 cash, the 20.00 online payment and the 61.40 pump): holds became real debits", captured() >= postedBefore + 7);
+        waitUntil("NeoBank posted the cleared payments", () -> captured() >= postedBefore + 8, 60);
+        expect("NeoBank POSTED the cleared payments (25.00, 5.00, 46.00, the stand-in 20.00, the 100.00 cash, the 20.00 online payment, the approved 80.00 online payment and the 61.40 pump): holds became real debits", captured() >= postedBefore + 8);
         String afterClearing = get(BANK + "/api/cards/" + cardId + "/authorizations?size=50", demoToken);
         expect("the pump cleared for 61.40, the total it really used", contains(afterClearing, "\"capturedAmount\":\"61.40\""));
         expect("the 25.00 addition no longer holds money: it was merged into the pump payment", contains(afterClearing, "\"status\":\"MERGED\""));
@@ -341,7 +365,20 @@ public class Scenario {
     }
 
     static String onlineBody(String amount, String code) {
-        return "{\"pan\":\"" + pan + "\",\"expiry\":\"" + expiry + "\",\"cvv\":\"" + code + "\",\"amount\":\"" + amount + "\",\"merchantId\":\"" + CAFE + "\"}";
+        return onlineBody(amount, code, null);
+    }
+
+    static String onlineBody(String amount, String code, String authentication) {
+        return "{\"pan\":\"" + pan + "\",\"expiry\":\"" + expiry + "\",\"cvv\":\"" + code + "\",\"amount\":\"" + amount + "\",\"merchantId\":\"" + CAFE + "\""
+                + (authentication == null ? "" : ",\"authentication\":\"" + authentication + "\"") + "}";
+    }
+
+    /** The customer answers a request in the bank's app (approve or reject); returns the HTTP status. */
+    static int answer(String waitingJson, String reference, String what, String token) throws Exception {
+        String id = find(waitingJson, "\"id\":\"([^\"]+)\",\"reference\":\"" + reference + "\"");
+        HttpRequest request = HttpRequest.newBuilder(URI.create(BANK + "/api/cards/authentications/" + id + "/" + what)).timeout(Duration.ofSeconds(20))
+                .header("Authorization", "Bearer " + token).POST(HttpRequest.BodyPublishers.noBody()).build();
+        return HTTP.send(request, HttpResponse.BodyHandlers.ofString()).statusCode();
     }
 
     static String pay(String amount, String shop, String pinOrNull) throws Exception {

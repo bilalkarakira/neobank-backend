@@ -166,6 +166,17 @@ three-strikes freeze as a wrong PIN and is checked before limits and funds; a PI
 stored or logged by any program (the shop's records, the queued reversals, the network's advices and the message dumps all leave it out), and the
 card network's stand-in **never** approves an online payment, because only the bank can check the code.
 
+#### The customer's approval (a simulation of 3-D Secure)
+
+An online payment of **more than 30.00** needs one more thing: the customer's approval of exactly that payment. The bank declines the first
+request with **1A** and puts a short reference in DE 48 of the answer (`3DS|K7M2QX`) and in a notification. The customer sees the request on the
+Cards page (shop, amount, time left; it is open for 5 minutes) and approves or rejects it. The shop then sends a **new** request with DE 48
+`3DS|K7M2QX` as the proof. The bank accepts it only if that approval is for the same card, amount and shop, is approved, not expired and not used;
+it is **used up in the same transaction** as the authorization, so one approval pays once, even when two requests carry it at the same moment.
+A rejected request is answered **05** for good; anything else is a new 1A. If the payment fails for lack of money, the approval is not used up.
+This is only the idea of 3-D Secure: no directory server, no ACS, no cryptograms and no browser redirect. An online payment cannot be added to
+(an addition carries neither the code nor an approval).
+
 ### 4. Disputes: chargebacks and representments
 
 A customer disputes a posted payment. The bank **credits the amount at once** (provisional credit) and sends a **chargeback**

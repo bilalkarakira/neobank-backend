@@ -67,6 +67,11 @@ the shop sends the number, the expiry date and the **security code** printed on 
 *Open the message list on the shop page:* the security code is hidden in the decoded message and in the hex dump, and it is in no table of any program.
 *Lesson: online, the card is not there, so the bank checks something printed on it instead of the PIN; the code is a secret like the PIN and is never kept.*
 
+**The customer's approval (1 minute):** pay **80.00** in the Online shop: the bank declines with **1A** and the page shows a reference. *Bank, Cards:* the same
+reference, shop and amount wait under "Approve an online payment?" (and in Notifications). Press **I approved it in the app: pay again** first: it is
+asked again (another reference, because nobody answered yet). Approve in the bank, press pay again: **approved**. Press it once more: asked again, the
+approval was used up. *Lesson: above a threshold the bank wants the customer, not only the card data; the proof is for one payment and works once.*
+
 ## 6. A dispute (2 minutes)
 
 *Bank, Cards:* under **Posted**, press **Dispute this payment**, choose a reason and send. The amount is **credited at once**
