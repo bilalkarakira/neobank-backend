@@ -146,9 +146,14 @@ public class AuthorizationEngine {
         if (receivables.hasOutstanding(account.getId())) {
             return decline(card, account, panHash, last4, r, ResponseCode.DO_NOT_HONOUR, now);
         }
-        // 7. what the card may do: purchases (processing code 00) in USD, not at blocked merchant categories
-        if (!"00".equals(r.processingCode().substring(0, 2)) || !"840".equals(r.currency())
-                || properties.blockedMcc().contains(r.mcc())) {
+        // 7. what the card may do: purchases (processing code 00) and cash withdrawals (01) in USD, not at blocked merchant categories
+        String processing = r.processingCode().substring(0, 2);
+        boolean cash = "01".equals(processing);
+        if ((!"00".equals(processing) && !cash) || !"840".equals(r.currency()) || properties.blockedMcc().contains(r.mcc())) {
+            return decline(card, account, panHash, last4, r, ResponseCode.NOT_PERMITTED, now);
+        }
+        // 7b. cash is paid out only against the PIN
+        if (cash && in.pinBlock() == null) {
             return decline(card, account, panHash, last4, r, ResponseCode.NOT_PERMITTED, now);
         }
         // 8. PIN (only when one was sent): before limits and funds, so a caller without the PIN learns nothing about money
@@ -170,6 +175,15 @@ public class AuthorizationEngine {
         BigDecimal today = authorizationRepository.sumApprovedSince(card.getId(), startOfDay);
         if (today.add(r.amount()).compareTo(card.getDailyLimit()) > 0) {
             return decline(card, account, panHash, last4, r, ResponseCode.EXCEEDS_LIMIT, now);
+        }
+        // 9b. the cash machine limits: one withdrawal, and the day's cash in all
+        if (cash) {
+            if (r.amount().compareTo(properties.cashPerWithdrawalMax()) > 0) {
+                return decline(card, account, panHash, last4, r, ResponseCode.EXCEEDS_LIMIT, now);
+            }
+            if (authorizationRepository.sumCashApprovedSince(card.getId(), startOfDay).add(r.amount()).compareTo(properties.cashDailyLimit()) > 0) {
+                return decline(card, account, panHash, last4, r, ResponseCode.EXCEEDS_LIMIT, now);
+            }
         }
         // 10 + 11. funds, then the hold, under the account lock
         String authCode = newAuthCode();

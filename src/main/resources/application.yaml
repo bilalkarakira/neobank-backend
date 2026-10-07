@@ -61,6 +61,8 @@ app:
     per-transaction-cap: 2500.00
     velocity-max: 10             # approvals per card within velocity-window
     velocity-window: 10m
+    cash-per-withdrawal-max: 300.00   # the cash machine: the most for one withdrawal ...
+    cash-daily-limit: 500.00          # ... and the most cash per card per UTC day (cash also counts toward the card's daily limit)
     hold-ttl: 7d                 # an authorization stops reserving money after this, unless cleared
     max-pin-failures: 3
     blocked-mcc: [7995, 4829, 6051]

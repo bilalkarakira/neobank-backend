@@ -14,7 +14,8 @@ class LuhnAndCryptoTest {
 
     private static CardProperties properties(String key) {
         return new CardProperties(key, 3, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, 10, Duration.ofMinutes(10),
-                Duration.ofDays(7), 3, List.of(), true, new CardProperties.Listener(false, 0, 1, Duration.ofSeconds(1), "127.0.0.1"));
+                Duration.ofDays(7), 3, List.of(), true, new CardProperties.Listener(false, 0, 1, Duration.ofSeconds(1), "127.0.0.1"),
+                new BigDecimal("300.00"), new BigDecimal("500.00"));
     }
 
     @Test

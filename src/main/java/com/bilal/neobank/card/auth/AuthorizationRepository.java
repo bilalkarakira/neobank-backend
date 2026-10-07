@@ -43,6 +43,15 @@ public interface AuthorizationRepository extends JpaRepository<Authorization, UU
             """)
     BigDecimal sumApprovedSince(@Param("cardId") UUID cardId, @Param("since") Instant since);
 
+    /** The cash (processing code 01) a card has been approved for since {@code since}: counts toward the daily cash limit. */
+    @Query("""
+            select coalesce(sum(a.amount), 0) from Authorization a
+            where a.cardId = :cardId and a.createdAt >= :since and a.processingCode like '01%'
+              and a.status in (com.bilal.neobank.card.auth.AuthorizationStatus.AUTHORIZED,
+                               com.bilal.neobank.card.auth.AuthorizationStatus.CAPTURED)
+            """)
+    BigDecimal sumCashApprovedSince(@Param("cardId") UUID cardId, @Param("since") Instant since);
+
     /** Approvals (response 00) of a card since {@code since}, whatever happened to them afterwards: the velocity count. */
     @Query("select count(a) from Authorization a where a.cardId = :cardId and a.responseCode = '00' and a.createdAt > :since")
     long countApprovalsSince(@Param("cardId") UUID cardId, @Param("since") Instant since);

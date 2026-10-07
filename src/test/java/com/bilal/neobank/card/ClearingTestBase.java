@@ -39,7 +39,7 @@ abstract class ClearingTestBase extends IssuerTestBase {
 
     /** The first presentment (1240) of an authorized request, for the FINAL amount. */
     protected Message presentment(Message request, String finalAmount) {
-        Message m = Message.of("1240").set(2, request.get(2)).set(3, "000000").set(4, cents(finalAmount)).set(7, request.get(7))
+        Message m = Message.of("1240").set(2, request.get(2)).set(3, request.get(3)).set(4, cents(finalAmount)).set(7, request.get(7))
                 .set(11, request.get(11)).set(12, request.get(12)).set(13, request.get(13)).set(14, request.get(14))
                 .set(18, request.get(18)).set(32, request.get(32)).set(37, request.get(37)).set(41, request.get(41))
                 .set(42, request.get(42)).set(43, request.get(43)).set(49, request.get(49));
