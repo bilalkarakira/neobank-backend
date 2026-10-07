@@ -26,12 +26,17 @@ class ResponseCodeTest {
             if (Modifier.isStatic(field.getModifiers()) && field.getType() == String.class && Modifier.isPublic(field.getModifiers())) {
                 String code = (String) field.get(null);
                 if (!code.equals(ResponseCode.APPROVED) && ResponseCode.reason(code).equals(FALLBACK)
-                        && !code.equals(ResponseCode.SYSTEM_ERROR) && !code.equals(ResponseCode.INVALID_TRANSACTION)) {
+                        && !code.equals(ResponseCode.SYSTEM_ERROR)) {
                     missing.add(field.getName());
                 }
             }
         }
         assertThat(missing).as("codes that only get the generic fallback text").isEmpty();
+    }
+
+    @Test
+    void aRefusedAdditionToAPaymentIsExplainedInItsOwnWords() {
+        assertThat(ResponseCode.reason(ResponseCode.INVALID_TRANSACTION)).contains("added to").isNotEqualTo(FALLBACK);
     }
 
     @Test

@@ -28,6 +28,7 @@ public final class ResponseCode {
         return switch (code) {
             case APPROVED -> null;
             case DO_NOT_HONOUR -> "The bank did not approve this payment.";
+            case INVALID_TRANSACTION -> "This payment could not be added to: it is closed, a limit on additions was reached, or the total would be too much.";
             case INVALID_AMOUNT -> "The amount was not valid.";
             case INVALID_CARD -> "The card details did not match.";
             case FORMAT_ERROR -> "The payment request was malformed.";
