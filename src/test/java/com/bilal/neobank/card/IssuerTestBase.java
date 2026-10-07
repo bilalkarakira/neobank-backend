@@ -49,7 +49,7 @@ abstract class IssuerTestBase extends AnalyticsTestBase {
     }
 
     /** A customer with a funded checking account and one card. */
-    protected record Fixture(String token, Acc account, UUID cardId, String pan, String pin, String expiry) {
+    protected record Fixture(String token, Acc account, UUID cardId, String pan, String pin, String expiry, String cvv) {
     }
 
     protected Fixture fixture(String email, String balance) throws Exception {
@@ -64,7 +64,7 @@ abstract class IssuerTestBase extends AnalyticsTestBase {
     protected Fixture card(String token, Acc account) {
         var issued = cardService.issue(UUID.fromString(account.userId()), UUID.fromString(account.id()), null);
         String expiry = jdbc.queryForObject("select expiry from cards where id = ?", String.class, issued.view().card().getId());
-        return new Fixture(token, account, issued.view().card().getId(), issued.pan(), issued.pin(), expiry);
+        return new Fixture(token, account, issued.view().card().getId(), issued.pan(), issued.pin(), expiry, issued.cvv());
     }
 
     protected void deposit(String token, Acc account, String amount) throws Exception {
@@ -103,6 +103,12 @@ abstract class IssuerTestBase extends AnalyticsTestBase {
                 .set(12, "120000").set(13, "1005").set(14, expiry).set(18, "5814").set(22, "051").set(25, "00")
                 .set(32, "123456").set(37, rrn).set(41, "TERM0001").set(42, "MERCHANT0000001")
                 .set(43, "%-40s".formatted("Corner Cafe Springfield")).set(49, "840");
+    }
+
+    /** An online payment (card not present): entry mode 812, condition 59, the security code in DE 53 and no PIN. */
+    protected Message online(Fixture f, String amount, String cvv) {
+        Message message = purchase(f, amount).set(22, "812").set(25, "59");
+        return cvv == null ? message : message.set(53, cvv);
     }
 
     protected Message withPin(Message message, String pin) {

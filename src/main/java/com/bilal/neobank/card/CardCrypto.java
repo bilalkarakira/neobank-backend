@@ -11,8 +11,8 @@ import java.util.HexFormat;
 import java.util.UUID;
 
 /**
- * Keyed hashes of PANs and PINs (HMAC-SHA256). A plain hash of a PAN would be brute-forceable (one BIN has only 10^9
- * numbers); with the key it is not. The PIN has only 10^4 values, so with the key it is still guessable: a known limit
+ * Keyed hashes of PANs, PINs and security codes (HMAC-SHA256). A plain hash of a PAN would be brute-forceable (one BIN has only 10^9
+ * numbers); with the key it is not. The PIN has only 10^4 values (the security code only 10^3), so with the key it is still guessable: a known limit
  * of this simulation (real issuers derive PINs in an HSM and never store them).
  */
 @Component
@@ -34,6 +34,15 @@ public class CardCrypto {
 
     public String hashPin(UUID cardId, String pin) {
         return hmac("pin:" + cardId + ":" + pin);
+    }
+
+    public String hashCvv(UUID cardId, String cvv) {
+        return hmac("cvv:" + cardId + ":" + cvv);
+    }
+
+    public boolean cvvMatches(UUID cardId, String cvv, String storedHash) {
+        return storedHash != null && cvv != null && MessageDigest.isEqual(hashCvv(cardId, cvv).getBytes(StandardCharsets.US_ASCII),
+                storedHash.getBytes(StandardCharsets.US_ASCII));
     }
 
     public boolean pinMatches(UUID cardId, String pin, String storedHash) {

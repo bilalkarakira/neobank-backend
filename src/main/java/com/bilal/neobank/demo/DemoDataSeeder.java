@@ -61,6 +61,8 @@ public class DemoDataSeeder implements ApplicationRunner {
     /** Test BIN 999900 + 000000001 + Luhn check digit. A published demo number, not a secret. */
     public static final String DEMO_CARD_PAN = "999900000000001" + Luhn.checkDigit("999900000000001");
     public static final String DEMO_CARD_PIN = "4321";
+    /** The security code of the demo card, for online payments (a published test value). */
+    public static final String DEMO_CARD_CVV = "123";
     private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
 
     /** How one month of interest was computed (kept in interest_accruals next to its transaction). */
@@ -140,9 +142,9 @@ public class DemoDataSeeder implements ApplicationRunner {
         if (owner.isEmpty()) {
             return false;
         }
-        boolean created = cardService.issueDemoCard(owner.get(0)[1], owner.get(0)[0], "Demo card", DEMO_CARD_PAN, DEMO_CARD_PIN);
+        boolean created = cardService.issueDemoCard(owner.get(0)[1], owner.get(0)[0], "Demo card", DEMO_CARD_PAN, DEMO_CARD_PIN, DEMO_CARD_CVV);
         if (created) {
-            log.info("Demo card created: number {} (test BIN), PIN {}", DEMO_CARD_PAN, DEMO_CARD_PIN);
+            log.info("Demo card created: number {} (test BIN), PIN {}, security code {}", DEMO_CARD_PAN, DEMO_CARD_PIN, DEMO_CARD_CVV);
         }
         return created;
     }

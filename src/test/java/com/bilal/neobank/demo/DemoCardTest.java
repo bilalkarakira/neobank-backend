@@ -27,6 +27,9 @@ class DemoCardTest {
     CardService cardService;
 
     @Autowired
+    com.bilal.neobank.card.CardCrypto crypto;
+
+    @Autowired
     DatabaseCleaner cleaner;
 
     @Autowired
@@ -59,6 +62,32 @@ class DemoCardTest {
     }
 
     @Test
+    void theDemoCardHasThePublishedSecurityCodeAsAKeyedHashOnly() {
+        seeder.seed();
+        seeder.seedDemoCard();
+
+        String hash = jdbc.queryForObject("select cvv_hash from cards", String.class);
+        java.util.UUID id = jdbc.queryForObject("select id from cards", java.util.UUID.class);
+        assertThat(hash).matches("[0-9a-f]{64}").isEqualTo(crypto.hashCvv(id, DemoDataSeeder.DEMO_CARD_CVV));
+        assertThat(DemoDataSeeder.DEMO_CARD_CVV).isEqualTo("123");
+    }
+
+    @Test
+    void aDemoCardFromBeforeOnlinePaymentsGetsItsSecurityCodeAndAnExistingOneIsKept() {
+        seeder.seed();
+        seeder.seedDemoCard();
+        jdbc.update("update cards set cvv_hash = null");
+
+        assertThat(seeder.seedDemoCard()).as("no new card").isFalse();
+        assertThat(jdbc.queryForObject("select cvv_hash is not null from cards", Boolean.class)).isTrue();
+
+        String before = jdbc.queryForObject("select cvv_hash from cards", String.class);
+        jdbc.update("update cards set cvv_hash = 'kept'");
+        seeder.seedDemoCard();
+        assertThat(jdbc.queryForObject("select cvv_hash from cards", String.class)).isEqualTo("kept").isNotEqualTo(before);
+    }
+
+    @Test
     void aDemoDatabaseSeededBeforeCardsExistedStillGetsItsCard() {
         seeder.seed();
         jdbc.update("delete from cards");
@@ -74,8 +103,8 @@ class DemoCardTest {
         String goodPan = "4111111111111111"; // valid Luhn, but not our BIN
         String wrongLuhn = "9999000000000013"; // our BIN, one digit off
         for (String[] bad : new String[][] { { goodPan, "1234" }, { wrongLuhn, "1234" }, { "999900000000011", "1234" },
-                { "9999000000000012", "123" }, { "9999000000000012", "12a4" } }) {
-            org.assertj.core.api.Assertions.assertThatThrownBy(() -> cardService.issueDemoCard(user, account, null, bad[0], bad[1]))
+                { "9999000000000012", "123" }, { "9999000000000012", "12a4" }, { "9999000000000012", "1234", "12" }, { "9999000000000012", "1234", "12a" } }) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> cardService.issueDemoCard(user, account, null, bad[0], bad[1], bad.length > 2 ? bad[2] : "123"))
                     .isInstanceOf(IllegalArgumentException.class);
         }
         assertThat(jdbc.queryForObject("select count(*) from cards", Integer.class)).isZero();
@@ -87,7 +116,7 @@ class DemoCardTest {
         java.util.UUID user = jdbc.queryForObject("select id from users where email = ?", java.util.UUID.class, DemoDataSeeder.DEMO_EMAIL);
         java.util.UUID savings = jdbc.queryForObject("select id from accounts where user_id = ? and type = 'SAVINGS'", java.util.UUID.class, user);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> cardService.issueDemoCard(user, savings, null, DemoDataSeeder.DEMO_CARD_PAN, "1234"))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> cardService.issueDemoCard(user, savings, null, DemoDataSeeder.DEMO_CARD_PAN, "1234", "123"))
                 .isInstanceOf(com.bilal.neobank.card.CardExceptions.AccountNotEligibleException.class);
         assertThat(jdbc.queryForObject("select count(*) from cards", Integer.class)).isZero();
     }

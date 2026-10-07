@@ -50,6 +50,10 @@ public class Card {
     @Column(name = "pin_hash", nullable = false, length = 64)
     private String pinHash;
 
+    /** Keyed hash of the security code printed on the card (online payments); null on cards issued before online payments existed. */
+    @Column(name = "cvv_hash", length = 64)
+    private String cvvHash;
+
     @Column(name = "pin_failures", nullable = false)
     private int pinFailures;
 
@@ -106,6 +110,10 @@ public class Card {
         this.dailyLimit = limit;
     }
 
+    public void setCvvHash(String cvvHash) {
+        this.cvvHash = cvvHash;
+    }
+
     public void setPinFailures(int failures) {
         this.pinFailures = failures;
     }
@@ -120,6 +128,7 @@ public class Card {
     public CardStatus getStatus() { return status; }
     public FreezeReason getFreezeReason() { return freezeReason; }
     public String getPinHash() { return pinHash; }
+    public String getCvvHash() { return cvvHash; }
     public int getPinFailures() { return pinFailures; }
     public BigDecimal getDailyLimit() { return dailyLimit; }
     public String getNickname() { return nickname; }

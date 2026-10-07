@@ -16,6 +16,7 @@ public final class ResponseCode {
     public static final String EXCEEDS_LIMIT = "61";
     public static final String VELOCITY = "65";
     public static final String PIN_TRIES_EXCEEDED = "75";
+    public static final String WRONG_SECURITY_CODE = "N7";
     public static final String ISSUER_UNAVAILABLE = "91";
     public static final String DUPLICATE = "94";
     public static final String SYSTEM_ERROR = "96";
@@ -38,7 +39,8 @@ public final class ResponseCode {
             case NOT_PERMITTED -> "The card is frozen, or this kind of payment is not allowed on it.";
             case EXCEEDS_LIMIT -> "Over the card's spending limit.";
             case VELOCITY -> "Too many payments in a short time.";
-            case PIN_TRIES_EXCEEDED -> "Too many wrong PINs: the card was frozen.";
+            case PIN_TRIES_EXCEEDED -> "Too many wrong PINs or security codes: the card was frozen.";
+            case WRONG_SECURITY_CODE -> "The security code was wrong or missing.";
             case ISSUER_UNAVAILABLE -> "The bank could not take card payments at that moment.";
             case DUPLICATE -> "Repeated payment request with different details.";
             default -> "The payment could not be processed.";

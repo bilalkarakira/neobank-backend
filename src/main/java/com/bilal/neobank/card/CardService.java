@@ -23,6 +23,7 @@ import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -37,8 +38,8 @@ public class CardService {
     public record CardView(Card card, Account account, BigDecimal heldOnAccount, BigDecimal spentToday) {
     }
 
-    /** The one moment the full number and PIN exist outside the bank's hashing. */
-    public record IssuedCard(CardView view, String pan, String pin) {
+    /** The one moment the full number, PIN and security code exist outside the bank's hashing. */
+    public record IssuedCard(CardView view, String pan, String pin, String cvv) {
     }
 
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -85,31 +86,37 @@ public class CardService {
             panHash = crypto.hashPan(pan);
         } while (cardRepository.existsByPanHash(panHash));
 
-        return create(userId, account, nickname, pan, panHash, "%04d".formatted(RANDOM.nextInt(10_000)));
+        return create(userId, account, nickname, pan, panHash, "%04d".formatted(RANDOM.nextInt(10_000)), "%03d".formatted(RANDOM.nextInt(1000)));
     }
 
     /**
-     * Demo data only: a card with a KNOWN number and PIN, so the demo can be driven from a terminal. Does nothing and
-     * returns false when that number already exists. The same rules as {@link #issue} apply to the account.
+     * Demo data only: a card with a KNOWN number, PIN and security code, so the demo can be driven from a terminal. Creates nothing and
+     * returns false when that number already exists (a demo card from before online payments only gets the security code). The same
+     * rules as {@link #issue} apply to the account.
      */
     @Transactional
-    public boolean issueDemoCard(UUID userId, UUID accountId, String nickname, String pan, String pin) {
-        if (pan.length() != 16 || !pan.startsWith(BIN) || !Luhn.isValid(pan) || !pin.matches("\\d{4}")) {
-            throw new IllegalArgumentException("a demo card needs a 16 digit Luhn number in BIN " + BIN + " and a 4 digit PIN");
+    public boolean issueDemoCard(UUID userId, UUID accountId, String nickname, String pan, String pin, String cvv) {
+        if (pan.length() != 16 || !pan.startsWith(BIN) || !Luhn.isValid(pan) || !pin.matches("\\d{4}") || !cvv.matches("\\d{3}")) {
+            throw new IllegalArgumentException("a demo card needs a 16 digit Luhn number in BIN " + BIN + ", a 4 digit PIN and a 3 digit security code");
         }
         String panHash = crypto.hashPan(pan);
-        if (cardRepository.existsByPanHash(panHash)) {
+        Optional<Card> existing = cardRepository.findByPanHash(panHash);
+        if (existing.isPresent()) {
+            if (existing.get().getCvvHash() == null) {
+                existing.get().setCvvHash(crypto.hashCvv(existing.get().getId(), cvv));
+                cardRepository.save(existing.get());
+            }
             return false;
         }
         Account account = accountRepository.findByIdAndUserId(accountId, userId).orElseThrow(AccountNotFoundException::new);
         if (account.getType() != AccountType.CHECKING || account.getStatus() != AccountStatus.ACTIVE) {
             throw new CardExceptions.AccountNotEligibleException();
         }
-        create(userId, account, nickname, pan, panHash, pin);
+        create(userId, account, nickname, pan, panHash, pin, cvv);
         return true;
     }
 
-    private IssuedCard create(UUID userId, Account account, String nickname, String pan, String panHash, String pin) {
+    private IssuedCard create(UUID userId, Account account, String nickname, String pan, String panHash, String pin, String cvv) {
         UUID accountId = account.getId();
         UUID id = UUID.randomUUID();
         Instant now = clock.instant();
@@ -119,7 +126,8 @@ public class CardService {
 
         Card card = cardRepository.save(new Card(id, userId, accountId, panHash, pan.substring(12), BIN, expiryText,
                 crypto.hashPin(id, pin), properties.defaultDailyLimit(), trimmed, now));
-        return new IssuedCard(view(card, account), pan, pin);
+        card.setCvvHash(crypto.hashCvv(id, cvv));
+        return new IssuedCard(view(card, account), pan, pin, cvv);
     }
 
     @Transactional(readOnly = true)

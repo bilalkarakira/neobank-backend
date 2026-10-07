@@ -74,7 +74,7 @@ public class IssuerMessageHandler {
             }
             parent = new ParentRef(ref.substring(4, 10), ref.substring(10, 20));
         }
-        AuthInput input = new AuthInput(request.get(2), request.get(14), request.get(52), fields, parent);
+        AuthInput input = new AuthInput(request.get(2), request.get(14), request.get(52), fields, parent, request.get(53));
         return respond(request, issuer.authorize(input));
     }
 

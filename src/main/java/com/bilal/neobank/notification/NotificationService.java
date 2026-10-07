@@ -66,7 +66,7 @@ public class NotificationService {
     @Transactional
     public void cardFrozenByPin(UUID userId, String last4) {
         insert(userId, "CARD_FROZEN_PIN", "Your card was frozen",
-                "Your card ending %s was frozen on %s after too many wrong PINs. If that was you, unfreeze it on the Cards page. If not, keep it frozen and cancel it."
+                "Your card ending %s was frozen on %s after too many wrong PINs or security codes. If that was you, unfreeze it on the Cards page. If not, keep it frozen and cancel it."
                         .formatted(last4, WHEN.format(now())));
     }
 

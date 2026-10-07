@@ -36,12 +36,19 @@ import java.util.Optional;
 @Service
 public class AuthorizationEngine {
 
-    /** What the issuer needs from an authorization request, already parsed from the message. */
-    public record AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request, ParentRef parent) {
+    /**
+     * What the issuer needs from an authorization request, already parsed from the message. {@code cvv} is the security code of an online
+     * payment (DE 53); it is only compared with the hash and never stored or logged.
+     */
+    public record AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request, ParentRef parent, String cvv) {
 
-        /** An ordinary authorization: it tops up nothing. */
+        /** An authorization that tops up nothing and has no security code. */
         public AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request) {
-            this(pan, expiry, pinBlock, request, null);
+            this(pan, expiry, pinBlock, request, null, null);
+        }
+
+        public AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request, ParentRef parent) {
+            this(pan, expiry, pinBlock, request, parent, null);
         }
     }
 
@@ -171,6 +178,17 @@ public class AuthorizationEngine {
             parent = incrementParent(panHash, r, in.parent(), processing, now);
             if (parent == null) {
                 return decline(card, account, panHash, last4, r, ResponseCode.INVALID_TRANSACTION, now);
+            }
+        }
+        // 7d. online (card not present): no PIN can be given, and the security code printed on the card must be right
+        boolean online = in.cvv() != null || (r.entryMode() != null && r.entryMode().startsWith("81"));
+        if (online) {
+            if (in.pinBlock() != null || card.getCvvHash() == null) {
+                return decline(card, account, panHash, last4, r, ResponseCode.NOT_PERMITTED, now);
+            }
+            String cvvCode = checkSecurityCode(card, in.cvv());
+            if (cvvCode != null) {
+                return decline(card, account, panHash, last4, r, cvvCode, now);
             }
         }
         // 8. PIN (only when one was sent): before limits and funds, so a caller without the PIN learns nothing about money
@@ -330,6 +348,23 @@ public class AuthorizationEngine {
             }
             return null;
         }
+        return failedSecret(card, ResponseCode.WRONG_PIN);
+    }
+
+    /**
+     * Null when the security code of an online payment is right. A wrong or missing code counts like a wrong PIN: the same counter, and
+     * the third failure freezes the card, so the code cannot be guessed by trying (it has only a thousand values). A right code does not
+     * reset the counter: that is the PIN's way out, and online payments must not be a way to undo failures.
+     */
+    private String checkSecurityCode(Card card, String cvv) {
+        if (crypto.cvvMatches(card.getId(), cvv, card.getCvvHash())) {
+            return null;
+        }
+        return failedSecret(card, ResponseCode.WRONG_SECURITY_CODE);
+    }
+
+    /** One more wrong PIN or security code: counted, and the card is frozen when the allowed number is reached. */
+    private String failedSecret(Card card, String wrongCode) {
         card.setPinFailures(card.getPinFailures() + 1);
         if (card.getPinFailures() >= properties.maxPinFailures()) {
             card.freeze(FreezeReason.PIN_TRIES);
@@ -338,7 +373,7 @@ public class AuthorizationEngine {
             return ResponseCode.PIN_TRIES_EXCEEDED;
         }
         cardRepository.save(card);
-        return ResponseCode.WRONG_PIN;
+        return wrongCode;
     }
 
     private Decision decline(Card card, Account account, String panHash, String last4, Authorization.Request request,
