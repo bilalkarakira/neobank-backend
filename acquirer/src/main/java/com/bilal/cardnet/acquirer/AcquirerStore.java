@@ -26,11 +26,16 @@ public final class AcquirerStore {
     /** A payment as the console lists it. */
     public record Row(UUID id, Instant createdAt, String stan, String rrn, String merchantName, String maskedPan, BigDecimal amount,
             String status, String responseCode, String authCode, String reason, boolean timedOut, boolean pinUsed,
-            String kind, BigDecimal finalAmount, UUID batchId, UUID refundOf, boolean cash) {
+            String kind, BigDecimal finalAmount, UUID batchId, UUID refundOf, boolean cash, BigDecimal incrementTotal) {
+
+        /** What the bank has authorized for this payment in all: the first amount and every approved addition. */
+        public BigDecimal authorizedTotal() {
+            return amount.add(incrementTotal);
+        }
 
         /** What will clear: the final amount when there is one (a tip), else the authorized amount. */
         public BigDecimal clearingAmount() {
-            return finalAmount != null ? finalAmount : amount;
+            return finalAmount != null ? finalAmount : authorizedTotal();
         }
 
         public boolean isRefund() {
@@ -161,6 +166,87 @@ public final class AcquirerStore {
         }
     }
 
+    // ---- additions to an authorization (a pump that tops up) ----
+
+    /** One request for more on a payment, as the console shows it. */
+    public record Increment(UUID id, UUID paymentId, Instant createdAt, String stan, String rrn, BigDecimal amount, String status,
+            String responseCode, String reason) {
+    }
+
+    /** Records a request for more, before it is sent (PENDING). The stored copy never has PIN data. */
+    public void insertIncrement(UUID id, UUID paymentId, Message request, Instant now) {
+        Message withoutPin = request.copyWithMti(request.mti()).remove(52);
+        exec("insert into acq_increments (id, payment_id, created_at, updated_at, stan, rrn, amount, status, request_ciphertext) values (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)",
+                id, paymentId, Timestamp.from(now), Timestamp.from(now), request.get(11), request.get(37), Messages.amount(request),
+                vault.encrypt(packager.pack(withoutPin), id.toString()));
+    }
+
+    public void incrementOutcome(UUID id, String status, String responseCode, String reason, boolean timedOut, Instant now) {
+        exec("update acq_increments set status = ?, response_code = ?, reason = ?, timed_out = ?, updated_at = ? where id = ?",
+                status, responseCode, reason, timedOut, Timestamp.from(now), id);
+    }
+
+    public void incrementStatus(UUID id, String status, String reason, Instant now) {
+        exec("update acq_increments set status = ?, reason = coalesce(?, reason), updated_at = ? where id = ?", status, reason, Timestamp.from(now), id);
+    }
+
+    /** @return whether it moved: only from the given status */
+    public boolean transitionIncrement(UUID id, String from, String to, String reason, Instant now) {
+        return exec("update acq_increments set status = ?, reason = ?, updated_at = ? where id = ? and status = ?", to, reason, Timestamp.from(now), id, from) == 1;
+    }
+
+    /**
+     * Adds an approved increase to what the payment will clear for. Only while the payment is still open: approved, not in a batch,
+     * with no final amount chosen yet, and not cash. One statement, so a day that closes at the same moment either includes it or not.
+     * @return whether it was added
+     */
+    public boolean addToPayment(UUID paymentId, BigDecimal amount, Instant now) {
+        return exec("update acq_transactions set increment_total = increment_total + ?, updated_at = ? where id = ? and status = 'APPROVED' "
+                + "and kind = 'PURCHASE' and batch_id is null and final_amount is null and mcc <> '6011'", amount, Timestamp.from(now), paymentId) == 1;
+    }
+
+    /** The stored request of an increase (without PIN data): what a reversal of it is built from. */
+    public Message incrementRequest(UUID id) {
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement("select request_ciphertext from acq_increments where id = ?")) {
+            ps.setObject(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalArgumentException("unknown increase");
+                }
+                return packager.unpack(vault.decrypt(rs.getBytes(1), id.toString()));
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("could not read an increase", e);
+        }
+    }
+
+    /** The increases of the given payments, oldest first, by payment. */
+    public java.util.Map<UUID, List<Increment>> incrementsOf(List<UUID> paymentIds) {
+        java.util.Map<UUID, List<Increment>> map = new java.util.HashMap<>();
+        if (paymentIds.isEmpty()) {
+            return map;
+        }
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(
+                "select id, payment_id, created_at, stan, rrn, amount, status, response_code, reason from acq_increments "
+                        + "where payment_id = any (?) order by created_at, id")) {
+            ps.setArray(1, c.createArrayOf("uuid", paymentIds.toArray()));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Increment i = new Increment(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getTimestamp(3).toInstant(), rs.getString(4),
+                            rs.getString(5), rs.getBigDecimal(6), rs.getString(7), rs.getString(8), rs.getString(9));
+                    map.computeIfAbsent(i.paymentId(), k -> new ArrayList<>()).add(i);
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("could not read increases", e);
+        }
+        return map;
+    }
+
+    public List<Increment> incrementsOf(UUID paymentId) {
+        return incrementsOf(List.of(paymentId)).getOrDefault(paymentId, List.of());
+    }
+
     private List<Row> query(String sql, Object... args) {
         List<Row> rows = new ArrayList<>();
         try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
@@ -173,7 +259,8 @@ public final class AcquirerStore {
                             rs.getString("rrn"), rs.getString("merchant_name"), rs.getString("masked_pan"), rs.getBigDecimal("amount"),
                             rs.getString("status"), rs.getString("response_code"), rs.getString("auth_code"), rs.getString("reason"),
                             rs.getBoolean("timed_out"), rs.getBoolean("pin_used"), rs.getString("kind"), rs.getBigDecimal("final_amount"),
-                            rs.getObject("batch_id", UUID.class), rs.getObject("refund_of", UUID.class), "6011".equals(rs.getString("mcc"))));
+                            rs.getObject("batch_id", UUID.class), rs.getObject("refund_of", UUID.class), "6011".equals(rs.getString("mcc")),
+                            rs.getBigDecimal("increment_total")));
                 }
             }
         } catch (SQLException e) {

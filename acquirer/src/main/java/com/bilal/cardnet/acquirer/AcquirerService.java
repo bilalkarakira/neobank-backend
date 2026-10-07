@@ -46,6 +46,10 @@ public final class AcquirerService {
     }
 
     /** What the terminal sends. {@code pin} may be null (no PIN entered); {@code expiry} is MM/YY as printed on the card. */
+    /** A request for more on a payment already approved (a pump that keeps filling): the extra amount only. */
+    public record IncreaseRequest(UUID paymentId, String amount) {
+    }
+
     /** A cash withdrawal at the machine: the PIN is not optional. */
     public record WithdrawRequest(String pan, String expiry, String amount, String pin) {
     }
@@ -204,6 +208,69 @@ public final class AcquirerService {
         return result(id, "DECLINED", code, null, "Declined (" + code + "): " + reason, sent, response);
     }
 
+    // ---- adding to an authorization ----
+
+    /**
+     * Asks the bank for more on an approved payment: a new authorization request (own STAN and RRN) whose DE 90 names the first one and
+     * whose amount is only the extra. Allowed while the payment is approved, not in a batch, without a final amount, and not cash.
+     * What the bank answers decides (12 when it cannot be added to, 51 without money, 61 over a limit ...). No answer in time: the
+     * increase is reversed on its own (a durable reversal) and the payment is unaffected.
+     */
+    public Result increase(IncreaseRequest request) {
+        String amountText = request.amount() == null ? "" : request.amount().strip();
+        if (!AMOUNT.matcher(amountText).matches() || new BigDecimal(amountText).signum() <= 0) {
+            throw new BadRequestException("The amount to add must be a positive number with at most two decimals, for example 25.00.");
+        }
+        BigDecimal amount = new BigDecimal(amountText).setScale(2);
+        AcquirerStore.Row row = store.find(request.paymentId()).orElseThrow(() -> new NotFoundException("No such payment."));
+        if (row.isRefund() || row.cash()) {
+            throw new ConflictException(row.cash() ? "A cash withdrawal cannot be added to." : "A refund cannot be added to.");
+        }
+        if (!row.status().equals("APPROVED") || row.batchId() != null) {
+            throw new ConflictException("Only an approved payment that is not in a clearing file yet can be added to; this one is "
+                    + row.status().toLowerCase().replace('_', ' ') + ".");
+        }
+        if (row.finalAmount() != null) {
+            throw new ConflictException("The final amount of this payment was already set, so nothing can be added to it.");
+        }
+
+        Message first = store.request(row.id());
+        Instant now = clock.instant();
+        UUID id = UUID.randomUUID();
+        Message extra = Message.of("0100").set(2, first.get(2)).set(3, "000000").set(4, Messages.de4(amount)).set(7, Messages.de7(now))
+                .set(11, Sequences.nextStan(ds)).set(12, TIME.format(now)).set(13, DATE.format(now)).set(14, first.get(14)).set(18, first.get(18))
+                .set(22, first.get(22)).set(25, first.get(25)).set(32, first.get(32)).set(37, Sequences.nextRrn(ds)).set(41, first.get(41))
+                .set(42, first.get(42)).set(43, first.get(43)).set(49, first.get(49))
+                .set(90, "0100" + first.get(11) + first.get(7) + Messages.padAcquirer(first.get(32)) + "00000000000");
+        store.insertIncrement(id, row.id(), extra, now);
+        Optional<Message> answer = client.exchange(extra, config.networkTimeout).filter(a -> answers(extra, a));
+        Instant after = clock.instant();
+        if (answer.isEmpty()) {
+            store.incrementOutcome(id, "REVERSING", null, "no answer in time: the addition is being cancelled", true, after);
+            reversals.add("ACQUIRER", extra, amount, "no answer in time", after, config.reversalDeadline, id);
+            worker.wake();
+            return result(id, "REVERSING", null, null, "No answer in time. Nothing was added: the request is being cancelled with a reversal that is retried until the bank confirms it. The payment is unchanged.",
+                    extra, null);
+        }
+        Message response = answer.get();
+        String code = response.get(39);
+        if (!"00".equals(code)) {
+            String reason = PosTexts.reason(code);
+            store.incrementOutcome(id, "DECLINED", code, reason, false, after);
+            return result(id, "DECLINED", code, null, "Not added (" + code + "): " + reason, extra, response);
+        }
+        if (!store.addToPayment(row.id(), amount, after)) {
+            // the bank said yes but the payment is no longer open (the day was closed meanwhile): give the money back
+            store.incrementOutcome(id, "REVERSING", code, "the payment was closed meanwhile: the addition is being cancelled", false, after);
+            reversals.add("ACQUIRER", extra, amount, "the payment was closed meanwhile", after, config.reversalDeadline, id);
+            worker.wake();
+            return result(id, "REVERSING", code, response.get(38), "The bank approved it, but this payment was closed in the meantime, so the addition is being cancelled.", extra, response);
+        }
+        store.incrementOutcome(id, "APPROVED", code, null, false, after);
+        BigDecimal total = store.find(row.id()).orElseThrow().authorizedTotal();
+        return result(id, "APPROVED", code, response.get(38), "Added " + amount.toPlainString() + ": " + total.toPlainString() + " is now authorized for this payment.", extra, response);
+    }
+
     // ---- void and resend ----
 
     /** Cancels an approved payment: a reversal that is retried until the issuer acknowledges it. */
@@ -215,6 +282,12 @@ public final class AcquirerService {
         }
         Message original = store.request(id);
         reversals.add("ACQUIRER", original, row.amount(), "voided at the terminal", now, config.reversalDeadline, id);
+        // what was added to the payment is cancelled with it: one reversal for each approved addition, by its own STAN and amount
+        for (AcquirerStore.Increment addition : store.incrementsOf(id)) {
+            if (store.transitionIncrement(addition.id(), "APPROVED", "REVERSING", "voided with the payment", now)) {
+                reversals.add("ACQUIRER", store.incrementRequest(addition.id()), addition.amount(), "voided with the payment", now, config.reversalDeadline, addition.id());
+            }
+        }
         worker.wake();
         return result(id, "REVERSING", row.responseCode(), row.authCode(), "Void sent: the payment is being cancelled and will show as reversed once the bank confirms.", original, null);
     }
@@ -239,11 +312,18 @@ public final class AcquirerService {
     // ---- the reversal worker's callbacks ----
 
     private void reversalDone(UUID reversalId) {
-        reversals.acqTransactionOf(reversalId).ifPresent(tx -> store.status(tx, "REVERSED", "the bank confirmed the reversal", clock.instant()));
+        // the id is that of a payment or of an addition to one: the other update changes nothing
+        reversals.acqTransactionOf(reversalId).ifPresent(tx -> {
+            store.status(tx, "REVERSED", "the bank confirmed the reversal", clock.instant());
+            store.incrementStatus(tx, "REVERSED", "the bank confirmed the reversal", clock.instant());
+        });
     }
 
     private void reversalFailed(UUID reversalId, String why) {
-        reversals.acqTransactionOf(reversalId).ifPresent(tx -> store.status(tx, "REVERSAL_FAILED", "could not be reversed (" + why + "): needs a person", clock.instant()));
+        reversals.acqTransactionOf(reversalId).ifPresent(tx -> {
+            store.status(tx, "REVERSAL_FAILED", "could not be reversed (" + why + "): needs a person", clock.instant());
+            store.incrementStatus(tx, "REVERSAL_FAILED", "could not be reversed (" + why + "): needs a person", clock.instant());
+        });
     }
 
     // ---- helpers ----

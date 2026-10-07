@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
  * GET  /                      the page
  * GET  /api/config            shops, demo card, acquirer and terminal ids
  * POST /api/pay               {pan, expiry, amount, merchantId, pin?}
+ * POST /api/increase          {id, amount}  ask the bank for more on an approved payment (a pump that keeps filling)
  * POST /api/withdraw          {pan, expiry, amount, pin}  a cash withdrawal at the cash machine (the PIN is required)
  * POST /api/resend            send the latest payment again (a duplicate)
  * POST /api/void              {id}
@@ -95,6 +96,7 @@ public final class PosConsole {
                 case "/api/config" -> only(exchange, method, "GET", () -> json(exchange, 200, config()));
                 case "/api/transactions" -> only(exchange, method, "GET", () -> json(exchange, 200, transactions()));
                 case "/api/pay" -> only(exchange, method, "POST", () -> json(exchange, 200, pay(Json.parseFlat(body(exchange)))));
+                case "/api/increase" -> only(exchange, method, "POST", () -> json(exchange, 200, increase(Json.parseFlat(body(exchange)))));
                 case "/api/withdraw" -> only(exchange, method, "POST", () -> json(exchange, 200, withdraw(Json.parseFlat(body(exchange)))));
                 case "/api/resend" -> only(exchange, method, "POST", () -> json(exchange, 200, resultMap(service.resendLast())));
                 case "/api/void" -> only(exchange, method, "POST", () -> json(exchange, 200, voidSale(Json.parseFlat(body(exchange)))));
@@ -184,6 +186,10 @@ public final class PosConsole {
         AcquirerService.Result result = service.pay(new AcquirerService.PayRequest(text(in, "pan"), text(in, "expiry"), text(in, "amount"),
                 text(in, "merchantId"), text(in, "pin")));
         return resultMap(result);
+    }
+
+    private Map<String, Object> increase(Map<String, Object> in) {
+        return resultMap(service.increase(new AcquirerService.IncreaseRequest(id(in), text(in, "amount"))));
     }
 
     private Map<String, Object> withdraw(Map<String, Object> in) {
@@ -299,6 +305,7 @@ public final class PosConsole {
         r.put("finalAmount", row.finalAmount() == null ? null : row.finalAmount().setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
         r.put("kind", row.kind());
         r.put("cash", row.cash());
+        r.put("incrementTotal", row.incrementTotal().setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
         r.put("refundOf", row.refundOf() == null ? null : row.refundOf().toString());
         r.put("status", row.status());
         r.put("responseCode", row.responseCode());
@@ -313,8 +320,21 @@ public final class PosConsole {
     private Map<String, Object> transactions() {
         Map<String, Object> map = Json.object();
         List<Object> rows = Json.list();
-        for (AcquirerStore.Row row : service.store().recent(20)) {
-            rows.add(rowMap(row));
+        List<AcquirerStore.Row> recent = service.store().recent(20);
+        Map<UUID, List<AcquirerStore.Increment>> additions = service.store().incrementsOf(recent.stream().map(AcquirerStore.Row::id).toList());
+        for (AcquirerStore.Row row : recent) {
+            Map<String, Object> entry = rowMap(row);
+            List<Object> adds = Json.list();
+            for (AcquirerStore.Increment a : additions.getOrDefault(row.id(), List.of())) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("amount", a.amount().setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
+                m.put("status", a.status());
+                m.put("responseCode", a.responseCode());
+                m.put("reason", a.reason());
+                adds.add(m);
+            }
+            entry.put("increments", adds);
+            rows.add(entry);
         }
         map.put("transactions", rows);
         return map;

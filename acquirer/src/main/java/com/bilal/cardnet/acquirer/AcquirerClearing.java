@@ -98,10 +98,10 @@ public final class AcquirerClearing {
         if (row.cash()) {
             throw new ConflictException("The amount of a cash withdrawal cannot be changed: the machine pays exactly what was asked.");
         }
-        BigDecimal limit = row.amount().multiply(BigDecimal.ONE.add(config.tipLimit)).setScale(2, java.math.RoundingMode.DOWN);
+        BigDecimal limit = row.authorizedTotal().multiply(BigDecimal.ONE.add(config.tipLimit)).setScale(2, java.math.RoundingMode.DOWN);
         if (amount.compareTo(limit) > 0) {
             throw new BadRequestException("The final amount can be at most " + limit.toPlainString() + " (the authorized "
-                    + row.amount().toPlainString() + " plus " + config.tipLimit.movePointRight(2).stripTrailingZeros().toPlainString() + "%).");
+                    + row.authorizedTotal().toPlainString() + " plus " + config.tipLimit.movePointRight(2).stripTrailingZeros().toPlainString() + "%).");
         }
         if (!store.adjust(id, amount, clock.instant())) {
             throw new ConflictException("Only an approved payment that is not in a batch yet can be changed; this one is "
@@ -125,7 +125,7 @@ public final class AcquirerClearing {
                 BigDecimal cleared;
                 String merchantName;
                 try (PreparedStatement ps = c.prepareStatement(
-                        "select status, kind, coalesce(final_amount, amount), merchant_name, mcc from acq_transactions where id = ? for update")) {
+                        "select status, kind, coalesce(final_amount, amount + increment_total), merchant_name, mcc from acq_transactions where id = ? for update")) {
                     ps.setObject(1, purchaseId);
                     try (ResultSet rs = ps.executeQuery()) {
                         if (!rs.next()) {
@@ -219,7 +219,7 @@ public final class AcquirerClearing {
                 }
                 count = claimed.size();
                 try (PreparedStatement ps = c.prepareStatement(
-                        "select sum((coalesce(final_amount, amount) * 100)::bigint) from acq_transactions where batch_id = ?")) {
+                        "select sum((coalesce(final_amount, amount + increment_total) * 100)::bigint) from acq_transactions where batch_id = ?")) {
                     ps.setObject(1, batchId);
                     try (ResultSet rs = ps.executeQuery()) {
                         rs.next();

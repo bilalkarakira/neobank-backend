@@ -177,7 +177,8 @@
         tr.appendChild(el('td', 'mono', new Date(t.createdAt).toLocaleTimeString()));
         tr.appendChild(el('td', null, t.merchant + (refund ? ' (refund)' : t.cash ? ' (cash)' : '')));
         tr.appendChild(el('td', 'mono', t.card));
-        tr.appendChild(el('td', 'num', refund ? '-' + t.amount : t.finalAmount && t.finalAmount !== t.amount ? t.amount + ' \u2192 ' + t.finalAmount : t.amount));
+        var added = t.incrementTotal && t.incrementTotal !== '0.00' ? ' + ' + t.incrementTotal : '';
+        tr.appendChild(el('td', 'num', refund ? '-' + t.amount : t.finalAmount && t.finalAmount !== t.amount + added ? t.amount + added + ' \u2192 ' + t.finalAmount : t.amount + added));
         var s = el('td'); s.appendChild(el('span', 'chip ' + t.status, t.status.replace(/_/g, ' ').toLowerCase())); tr.appendChild(s);
         var detail = (t.responseCode ? 'code ' + t.responseCode + ' ' : '') + (t.authCode ? '(' + t.authCode + ') ' : '') + (t.reason || '');
         tr.appendChild(el('td', 'muted', detail));
@@ -190,6 +191,16 @@
           var b = el('button', null, 'Void'); b.addEventListener('click', function () { voidSale(t.id, b); });
           if (!t.cash) { w.appendChild(tip); w.appendChild(set); }
           w.appendChild(b); a.appendChild(w);
+          if (!t.cash && !t.finalAmount) {
+            var w3 = el('div', 'inline');
+            var more = el('input'); more.placeholder = 'add amount'; more.inputMode = 'decimal'; more.setAttribute('aria-label', 'Amount to add');
+            var addBtn = el('button', null, 'Add to payment'); addBtn.title = 'Ask the bank for more on this payment, like a pump that keeps filling';
+            addBtn.addEventListener('click', function () { increase(t.id, more.value, addBtn); });
+            w3.appendChild(more); w3.appendChild(addBtn); a.appendChild(w3);
+          }
+          (t.increments || []).forEach(function (x) {
+            a.appendChild(el('div', 'muted', '+ ' + x.amount + ' ' + x.status.toLowerCase().replace(/_/g, ' ') + (x.reason ? ' (' + x.reason + ')' : '')));
+          });
         } else if (t.status === 'CLEARED' && !refund && !t.cash) {
           var w2 = el('div', 'inline');
           var amt = el('input'); amt.placeholder = 'refund amount'; amt.inputMode = 'decimal'; amt.setAttribute('aria-label', 'Refund amount');
@@ -205,6 +216,17 @@
     button.disabled = true;
     api('POST', path, { id: id, amount: amount }).then(function (r) {
       if (r.status === 200) showBanner('info', path === '/api/refund' ? 'Refund recorded. It goes to the network when you close the day.' : 'The final amount is set. It goes to the network when you close the day.');
+      else showBanner('error', r.json.error || 'That could not be done.');
+      button.disabled = false;
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      loadTransactions();
+    });
+  }
+
+  function increase(id, amount, button) {
+    button.disabled = true;
+    api('POST', '/api/increase', { id: id, amount: amount }).then(function (r) {
+      if (r.status === 200) showBanner(r.json.status === 'APPROVED' ? 'info' : 'error', r.json.message);
       else showBanner('error', r.json.error || 'That could not be done.');
       button.disabled = false;
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();

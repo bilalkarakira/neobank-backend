@@ -79,6 +79,16 @@ class RulesTest {
     }
 
     @Test
+    void anIncrementIsNeverStoodInFor() {
+        // DE 90 names the authorization it adds to: only the bank knows that one
+        String reference = "0100" + "000001" + "1005120000" + "00000123456" + "00000000000";
+        StandIn.Decision decision = decide(purchase("5.00").set(90, reference), "0");
+        assertThat(decision.approve()).isFalse();
+        assertThat(decision.reason()).contains("increment");
+        assertThat(decide(purchase("5.00"), "0").approve()).as("the same request without the reference").isTrue();
+    }
+
+    @Test
     void onlyPurchasesInDollarsAtAllowedMerchantsQualify() {
         assertThat(decide(purchase("5.00").set(3, "010000"), "0").approve()).as("cash").isFalse();
         assertThat(decide(purchase("5.00").set(3, "200000"), "0").approve()).as("refund").isFalse();

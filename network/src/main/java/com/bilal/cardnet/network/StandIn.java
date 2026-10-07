@@ -21,6 +21,9 @@ public final class StandIn {
 
     /** @param usedToday what this card has already been approved for by stand-in today (UTC) */
     public static Decision decide(Message request, BigDecimal usedToday, NetworkConfig config) {
+        if (request.has(90)) {
+            return no("an increment adds to an authorization only the bank knows");
+        }
         if (request.has(52)) {
             return no("a PIN was sent and the network cannot verify it");
         }
