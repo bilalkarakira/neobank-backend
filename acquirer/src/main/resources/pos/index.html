@@ -245,6 +245,8 @@
       if (r.status === 200) showBanner('info', 'Your answer was sent to the network for the cardholder\u2019s bank.');
       else showBanner('error', r.json.error || 'That could not be done.');
       button.disabled = false;
+      // the table is not redrawn while a field in it has focus: let go of it, or the answered row would stay on screen
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       loadDisputes();
     });
   }
