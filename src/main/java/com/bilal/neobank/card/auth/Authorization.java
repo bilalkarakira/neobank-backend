@@ -113,6 +113,10 @@ public class Authorization {
     @Column(name = "captured_at")
     private Instant capturedAt;
 
+    /** The first authorization this one tops up (an incremental authorization), or null. */
+    @Column(name = "parent_id")
+    private UUID parentId;
+
     /** Cleared although this bank never authorized it: the shop was paid by its bank, so the presentment was honoured. */
     @Column(nullable = false)
     private boolean forced;
@@ -215,12 +219,18 @@ public class Authorization {
         this.releasedAt = now.truncatedTo(ChronoUnit.MICROS);
     }
 
+    /** Makes this authorization an increment of {@code first}. */
+    public void incrementOf(UUID first) {
+        this.parentId = first;
+    }
+
     /** True while the amount is still reserved. */
     public boolean holdsMoney(Instant now) {
         return status == AuthorizationStatus.AUTHORIZED && expiresAt != null && expiresAt.isAfter(now);
     }
 
     public UUID getId() { return id; }
+    public UUID getParentId() { return parentId; }
     public UUID getCardId() { return cardId; }
     public UUID getAccountId() { return accountId; }
     public String getPanHash() { return panHash; }

@@ -85,6 +85,24 @@ public interface AuthorizationRepository extends JpaRepository<Authorization, UU
     Optional<Authorization> findFirstByPanHashAndAcquirerIdAndStanAndTransmittedAtOrderByCreatedAtAsc(String panHash,
             String acquirerId, String stan, String transmittedAt);
 
+    /** How many increments of an authorization are in a given state. */
+    long countByParentIdAndStatus(UUID parentId, AuthorizationStatus status);
+
+    /** What the active increments of an authorization hold in all. */
+    @Query("""
+            select coalesce(sum(a.amount), 0) from Authorization a
+            where a.parentId = :parentId and a.status = com.bilal.neobank.card.auth.AuthorizationStatus.AUTHORIZED
+            """)
+    BigDecimal sumActiveIncrements(@Param("parentId") UUID parentId);
+
+    /** The first authorization was cleared for the total: its increments no longer hold anything. */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            update Authorization a set a.status = com.bilal.neobank.card.auth.AuthorizationStatus.MERGED, a.releasedAt = :now
+            where a.parentId = :parentId and a.status = com.bilal.neobank.card.auth.AuthorizationStatus.AUTHORIZED
+            """)
+    int mergeIncrements(@Param("parentId") UUID parentId, @Param("now") Instant now);
+
     /** Housekeeping: holds past their expiry are marked EXPIRED. They stopped reserving money at expires_at already. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""

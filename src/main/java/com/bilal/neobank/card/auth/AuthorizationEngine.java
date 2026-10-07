@@ -37,7 +37,16 @@ import java.util.Optional;
 public class AuthorizationEngine {
 
     /** What the issuer needs from an authorization request, already parsed from the message. */
-    public record AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request) {
+    public record AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request, ParentRef parent) {
+
+        /** An ordinary authorization: it tops up nothing. */
+        public AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request) {
+            this(pan, expiry, pinBlock, request, null);
+        }
+    }
+
+    /** DE 90 of an incremental authorization: which first authorization it adds to (its STAN and transmission time). */
+    public record ParentRef(String originalStan, String originalTransmittedAt) {
     }
 
     /** A 0120 advice: the network already approved this payment with {@code authCode}. */
@@ -156,6 +165,14 @@ public class AuthorizationEngine {
         if (cash && in.pinBlock() == null) {
             return decline(card, account, panHash, last4, r, ResponseCode.NOT_PERMITTED, now);
         }
+        // 7c. an increment names the authorization it adds to (DE 90) and has to fit under it
+        Authorization parent = null;
+        if (in.parent() != null) {
+            parent = incrementParent(panHash, r, in.parent(), processing, now);
+            if (parent == null) {
+                return decline(card, account, panHash, last4, r, ResponseCode.INVALID_TRANSACTION, now);
+            }
+        }
         // 8. PIN (only when one was sent): before limits and funds, so a caller without the PIN learns nothing about money
         if (in.pinBlock() != null) {
             String pinCode = checkPin(card, in.pan(), in.pinBlock());
@@ -186,13 +203,45 @@ public class AuthorizationEngine {
             }
         }
         // 10 + 11. funds, then the hold, under the account lock
-        String authCode = newAuthCode();
+        // an increment answers with the code of the authorization it adds to: that is the one the shop presents for clearing
+        String authCode = parent != null ? parent.getAuthCode() : newAuthCode();
         Authorization approved = Authorization.approved(card.getId(), account.getId(), panHash, last4, r, authCode, now,
                 now.plus(properties.holdTtl()));
+        if (parent != null) {
+            approved.incrementOf(parent.getId());
+        }
         if (!holdService.tryReserve(approved)) {
             return decline(card, account, panHash, last4, r, ResponseCode.INSUFFICIENT_FUNDS, now);
         }
         return new Decision(ResponseCode.APPROVED, authCode);
+    }
+
+    /**
+     * The first authorization an increment adds to, or null when it may not be added to: it must exist for this card, still hold its
+     * money, not be an increment or cash itself, be at the same terminal and merchant, have fewer increments than allowed, and
+     * stay within the per-transaction cap together with its active increments and this one. Called under the account's row lock,
+     * so two increments at the same moment are counted one after the other.
+     */
+    private Authorization incrementParent(String panHash, Authorization.Request r, ParentRef ref, String processing, Instant now) {
+        if (!"00".equals(processing)) {
+            return null;
+        }
+        Optional<Authorization> found = authorizationRepository.findFirstByPanHashAndAcquirerIdAndStanAndTransmittedAtOrderByCreatedAtAsc(
+                panHash, r.acquirerId(), ref.originalStan(), ref.originalTransmittedAt());
+        if (found.isEmpty()) {
+            return null;
+        }
+        Authorization first = found.get();
+        boolean cash = first.getProcessingCode() != null && first.getProcessingCode().startsWith("01");
+        if (first.getParentId() != null || cash || !first.holdsMoney(now) || !first.getTerminalId().equals(r.terminalId())
+                || !first.getMerchantId().equals(r.merchantId())) {
+            return null;
+        }
+        if (authorizationRepository.countByParentIdAndStatus(first.getId(), AuthorizationStatus.AUTHORIZED) >= properties.maxIncrements()) {
+            return null;
+        }
+        BigDecimal total = first.getAmount().add(authorizationRepository.sumActiveIncrements(first.getId())).add(r.amount());
+        return total.compareTo(properties.perTransactionCap()) > 0 ? null : first;
     }
 
     /**

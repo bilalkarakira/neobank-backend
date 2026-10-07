@@ -162,6 +162,8 @@ public class ClearingPoster {
         if (authorization != null) {
             authorization.capture(amount, now);
             authorizations.saveAndFlush(authorization);
+            // what the shop added to this payment (a pump that topped up) is part of the amount cleared now: those holds are over too
+            authorizations.mergeIncrements(authorization.getId(), now);
         } else {
             authorization = Authorization.forcedCapture(card.getId(), account.getId(), panHash, card.getLast4(), request, m.get(38) == null ? "" : m.get(38), amount, now);
             authorizations.saveAndFlush(authorization);

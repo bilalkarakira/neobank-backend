@@ -5,6 +5,7 @@ import com.bilal.neobank.card.auth.Authorization;
 import com.bilal.neobank.card.auth.AuthorizationEngine.AdviceInput;
 import com.bilal.neobank.card.auth.AuthorizationEngine.AuthInput;
 import com.bilal.neobank.card.auth.AuthorizationEngine.Decision;
+import com.bilal.neobank.card.auth.AuthorizationEngine.ParentRef;
 import com.bilal.neobank.card.auth.AuthorizationEngine.ReversalInput;
 import com.bilal.neobank.card.auth.IssuerService;
 import com.bilal.neobank.card.auth.ResponseCode;
@@ -64,7 +65,16 @@ public class IssuerMessageHandler {
                 request.get(37), request.get(41).strip(), request.get(42).strip(), optional(request, 43), request.get(18),
                 padAcquirer(request.get(32)), request.get(3), optional(request, 22), request.get(13), request.get(7),
                 amount(request.get(4)), request.get(49));
-        AuthInput input = new AuthInput(request.get(2), request.get(14), request.get(52), fields);
+        // DE 90 turns the request into an increment: the first authorization it adds to (original MTI, STAN, time, acquirer)
+        ParentRef parent = null;
+        if (request.has(90)) {
+            String ref = request.get(90);
+            if (ref.length() < 31 || !ref.startsWith("0100") || !padAcquirer(request.get(32)).equals(ref.substring(20, 31))) {
+                return respond(request, new Decision(ResponseCode.FORMAT_ERROR, null));
+            }
+            parent = new ParentRef(ref.substring(4, 10), ref.substring(10, 20));
+        }
+        AuthInput input = new AuthInput(request.get(2), request.get(14), request.get(52), fields, parent);
         return respond(request, issuer.authorize(input));
     }
 

@@ -7,5 +7,7 @@ public enum AuthorizationStatus {
     REVERSED,
     EXPIRED,
     /** Cleared and posted to the ledger (set by clearing, a later phase). */
-    CAPTURED
+    CAPTURED,
+    /** An increment whose first authorization was cleared for the total: it no longer holds money (P6c). */
+    MERGED
 }
