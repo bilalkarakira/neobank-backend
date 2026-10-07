@@ -58,6 +58,15 @@ Type the real amount the pump used (for example 61.40) under **final amount** an
 and the addition reads "Added to the payment". *Lesson: an incremental authorization is an authorization of its own that points at the
 first one; clearing is for the final amount, and every hold of the payment ends with it.*
 
+## 5d. An online shop (1 minute)
+
+*Shop page, Online shop:* **Use the demo card** (it also fills in the security code) and pay 19.99: approved. There is no card in a terminal and no PIN:
+the shop sends the number, the expiry date and the **security code** printed on the card. Now change the code and pay again: the bank declines with
+**N7**, "The security code is wrong". Three wrong codes (or wrong PINs, in any mix) freeze the card, and the customer is told.
+*Bank, Cards:* the payment is marked **Online payment**; issue a new card and read the security code on the one screen that shows it (once).
+*Open the message list on the shop page:* the security code is hidden in the decoded message and in the hex dump, and it is in no table of any program.
+*Lesson: online, the card is not there, so the bank checks something printed on it instead of the PIN; the code is a secret like the PIN and is never kept.*
+
 ## 6. A dispute (2 minutes)
 
 *Bank, Cards:* under **Posted**, press **Dispute this payment**, choose a reason and send. The amount is **credited at once**

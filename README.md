@@ -157,6 +157,15 @@ one must still hold its money, be the same terminal and merchant, not be cash, h
 stay within the per-transaction cap. At the end of the day the shop clears the **first** authorization for the final amount, and the
 additions stop holding money.
 
+### 3d. Online payments (card not present)
+
+A payment in an online shop has no card in a terminal and **no PIN**. The shop's request has entry mode 812 (DE 22), condition code 59 (DE 25) and
+the **security code** printed on the card in DE 53 (a simplification: real systems carry it in other private elements). NeoBank keeps only a keyed
+hash of the code (like the PIN) and shows it **once**, when the card is issued. A wrong or missing code is answered **N7**, counts toward the same
+three-strikes freeze as a wrong PIN and is checked before limits and funds; a PIN in an online payment is refused (57). The security code is never
+stored or logged by any program (the shop's records, the queued reversals, the network's advices and the message dumps all leave it out), and the
+card network's stand-in **never** approves an online payment, because only the bank can check the code.
+
 ### 4. Disputes: chargebacks and representments
 
 A customer disputes a posted payment. The bank **credits the amount at once** (provisional credit) and sends a **chargeback**

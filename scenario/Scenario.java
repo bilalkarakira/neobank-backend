@@ -37,6 +37,7 @@ public class Scenario {
     static final List<String> failures = new ArrayList<>();
     static String pan;
     static String pin;
+    static String cvv;
     static String expiry;
     static String bankToken;
     static String adminToken;
@@ -54,6 +55,7 @@ public class Scenario {
         pan = find(config, "\"demoCard\":\\{\"pan\":\"(\\d+)\"");
         pin = find(config, "\"pin\":\"(\\d+)\"");
         expiry = find(config, "\"expiry\":\"([0-9/]+)\"");
+        cvv = find(config, "\"cvv\":\"(\\d+)\"");
         int heldBefore = holds();
         int capturedBefore = captured();
         System.out.println("The demo card ends in " + pan.substring(12) + ". NeoBank holds " + heldBefore + " payment(s) for it, " + capturedBefore + " are posted.\n");
@@ -122,6 +124,18 @@ public class Scenario {
         expect("the bank approved 100.00 in cash", "APPROVED".equals(field(cash, "status")));
         expect("NeoBank marks it as a cash withdrawal", contains(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken), "\"cash\":true"));
 
+        step("9b. An online shop: no card in a terminal and no PIN, the security code on the card instead");
+        String wrongCode = "000".equals(cvv) ? "111" : "000";
+        String wrongOnline = post(POS + "/api/pay-online", onlineBody("20.00", wrongCode));
+        expect("a wrong security code is declined with code N7", "DECLINED".equals(field(wrongOnline, "status")) && "N7".equals(field(wrongOnline, "responseCode")));
+        String rightOnline = post(POS + "/api/pay-online", onlineBody("20.00", cvv));
+        expect("the right security code is approved", "APPROVED".equals(field(rightOnline, "status")));
+        String onlineActivity = get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken);
+        expect("NeoBank marks the payment as an online payment", contains(onlineActivity, "\"online\":true"));
+        expect("the security code is nowhere in what the shop or the bank shows",
+                !wrongOnline.contains("\"" + cvv + "\"") && !rightOnline.contains(": " + cvv) && !contains(onlineActivity, "cvv"));
+        System.out.println("   (the wrong code counted like a wrong PIN: the next payment with the PIN resets the counter)\n");
+
         step("10. A fuel pump: 50.00 is authorized first, the pump asks for 25.00 more, and an addition that is too much is refused");
         String pump = pay("50.00", GAS, pin);
         expect("the pump's first authorization is approved", "APPROVED".equals(field(pump, "status")));
@@ -143,8 +157,8 @@ public class Scenario {
         expect("a clearing file was sent", batchFile != null);
         waitUntil("the network accepted the file", () -> "ACCEPTED".equals(batchStatus(batchFile)), 60);
         expect("the network accepted it (and NeoBank answered for every item)", "ACCEPTED".equals(batchStatus(batchFile)));
-        waitUntil("NeoBank posted the cleared payments", () -> captured() >= postedBefore + 6, 60);
-        expect("NeoBank POSTED the cleared payments (25.00, 5.00, 46.00, the stand-in 20.00, the 100.00 cash and the 61.40 pump): holds became real debits", captured() >= postedBefore + 6);
+        waitUntil("NeoBank posted the cleared payments", () -> captured() >= postedBefore + 7, 60);
+        expect("NeoBank POSTED the cleared payments (25.00, 5.00, 46.00, the stand-in 20.00, the 100.00 cash, the 20.00 online payment and the 61.40 pump): holds became real debits", captured() >= postedBefore + 7);
         String afterClearing = get(BANK + "/api/cards/" + cardId + "/authorizations?size=50", demoToken);
         expect("the pump cleared for 61.40, the total it really used", contains(afterClearing, "\"capturedAmount\":\"61.40\""));
         expect("the 25.00 addition no longer holds money: it was merged into the pump payment", contains(afterClearing, "\"status\":\"MERGED\""));
@@ -324,6 +338,10 @@ public class Scenario {
         String json = get(POS + "/api/batches", null);
         Matcher m = Pattern.compile("\"fileName\":\"" + Pattern.quote(fileName) + "\"[^}]*?\"status\":\"([A-Z]+)\"").matcher(json);
         return m.find() ? m.group(1) : "?";
+    }
+
+    static String onlineBody(String amount, String code) {
+        return "{\"pan\":\"" + pan + "\",\"expiry\":\"" + expiry + "\",\"cvv\":\"" + code + "\",\"amount\":\"" + amount + "\",\"merchantId\":\"" + CAFE + "\"}";
     }
 
     static String pay(String amount, String shop, String pinOrNull) throws Exception {
