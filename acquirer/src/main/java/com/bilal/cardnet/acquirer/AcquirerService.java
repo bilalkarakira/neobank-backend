@@ -47,7 +47,12 @@ public final class AcquirerService {
 
     /** What the terminal sends. {@code pin} may be null (no PIN entered); {@code expiry} is MM/YY as printed on the card. */
     /** An online payment: no card in a terminal, so no PIN; the security code printed on the card instead. */
-    public record OnlineRequest(String pan, String expiry, String cvv, String amount, String merchantId) {
+    public record OnlineRequest(String pan, String expiry, String cvv, String amount, String merchantId, String authentication) {
+
+        /** A first try: no proof of the customer's approval yet. */
+        public OnlineRequest(String pan, String expiry, String cvv, String amount, String merchantId) {
+            this(pan, expiry, cvv, amount, merchantId, null);
+        }
     }
 
     /** A request for more on a payment already approved (a pump that keeps filling): the extra amount only. */
@@ -63,7 +68,7 @@ public final class AcquirerService {
 
     /** What the terminal shows. The texts are the decoded messages with the number masked and the PIN hidden, and the redacted hex. */
     public record Result(UUID id, String status, String responseCode, String authCode, String message, String requestText, String requestHex,
-            String responseText, String responseHex) {
+            String responseText, String responseHex, String challenge) {
     }
 
     private static final Pattern PAN = Pattern.compile("\\d{13,19}");
@@ -71,6 +76,7 @@ public final class AcquirerService {
     private static final Pattern AMOUNT = Pattern.compile("\\d{1,7}(\\.\\d{1,2})?");
     private static final Pattern PIN = Pattern.compile("\\d{4,12}");
     private static final Pattern CVV = Pattern.compile("\\d{3,4}");
+    private static final Pattern AUTHENTICATION = Pattern.compile("[A-Za-z0-9]{4,8}");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HHmmss").withZone(ZoneOffset.UTC);
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMdd").withZone(ZoneOffset.UTC);
 
@@ -134,7 +140,7 @@ public final class AcquirerService {
             throw new BadRequestException("A PIN is 4 to 12 digits.");
         }
 
-        return authorize(merchant, pan, expiry, amountText, pin, "000000", "051", "00", null);
+        return authorize(merchant, pan, expiry, amountText, pin, "000000", "051", "00", null, null);
     }
 
     /**
@@ -160,7 +166,11 @@ public final class AcquirerService {
         if (!AMOUNT.matcher(amountText).matches() || new BigDecimal(amountText).signum() <= 0) {
             throw new BadRequestException("The amount must be a positive number with at most two decimals, for example 12.50.");
         }
-        return authorize(merchant, pan, expiry, amountText, null, "000000", "812", "59", cvv);
+        String authentication = request.authentication() == null || request.authentication().isBlank() ? null : request.authentication().strip();
+        if (authentication != null && !AUTHENTICATION.matcher(authentication).matches()) {
+            throw new BadRequestException("The approval reference is 4 to 8 letters and digits.");
+        }
+        return authorize(merchant, pan, expiry, amountText, null, "000000", "812", "59", cvv, authentication);
     }
 
     /**
@@ -191,11 +201,11 @@ public final class AcquirerService {
         if (amount.compareTo(config.atmMax) > 0) {
             throw new BadRequestException("The machine pays at most " + config.atmMax.toPlainString() + " at a time.");
         }
-        return authorize(config.atm, pan, expiry, amount.setScale(2).toPlainString(), pin, "010000", "051", "00", null);
+        return authorize(config.atm, pan, expiry, amount.setScale(2).toPlainString(), pin, "010000", "051", "00", null, null);
     }
 
     private Result authorize(AcquirerConfig.Merchant merchant, String pan, java.util.regex.Matcher expiry, String amountText, String pin,
-            String processingCode, String entryMode, String conditionCode, String cvv) {
+            String processingCode, String entryMode, String conditionCode, String cvv, String authentication) {
         Instant now = clock.instant();
         UUID id = UUID.randomUUID();
         String stan = Sequences.nextStan(ds);
@@ -205,6 +215,9 @@ public final class AcquirerService {
                 .set(14, expiry.group(2) + expiry.group(1)).set(18, merchant.mcc()).set(22, entryMode).set(25, conditionCode)
                 .set(32, config.acquirerId).set(37, rrn).set(41, "%-8s".formatted(config.terminalId)).set(42, "%-15s".formatted(merchant.id()))
                 .set(43, "%-40s".formatted(merchant.name())).set(49, "840");
+        if (authentication != null) {
+            payment.set(48, "3DS|" + authentication); // the proof of the customer's approval is no secret: it is kept like any other field
+        }
         // PIN data and the security code are in the message that is sent only: the stored copy and any queued reversal never have them
         Message sent = payment.copyWithMti("0100");
         if (pin != null) {
@@ -243,7 +256,18 @@ public final class AcquirerService {
         }
         String reason = PosTexts.reason(code);
         store.outcome(id, "DECLINED", code, null, reason, false, now);
+        String challenge = challengeOf(response);
+        if ("1A".equals(code) && challenge != null) {
+            return result(id, "DECLINED", code, null, "The customer must approve this payment first (1A). Reference " + challenge
+                    + ": it is shown in the bank's app. After approving, pay again with this reference.", sent, response);
+        }
         return result(id, "DECLINED", code, null, "Declined (" + code + "): " + reason, sent, response);
+    }
+
+    /** The approval reference in DE 48 of an answer ("3DS|reference"), or null. */
+    private static String challengeOf(Message response) {
+        String data = response == null ? null : response.get(48);
+        return data != null && data.startsWith("3DS|") && data.length() > 4 ? data.substring(4).strip() : null;
     }
 
     // ---- adding to an authorization ----
@@ -261,8 +285,10 @@ public final class AcquirerService {
         }
         BigDecimal amount = new BigDecimal(amountText).setScale(2);
         AcquirerStore.Row row = store.find(request.paymentId()).orElseThrow(() -> new NotFoundException("No such payment."));
-        if (row.isRefund() || row.cash()) {
-            throw new ConflictException(row.cash() ? "A cash withdrawal cannot be added to." : "A refund cannot be added to.");
+        if (row.isRefund() || row.cash() || row.online()) {
+            throw new ConflictException(row.cash() ? "A cash withdrawal cannot be added to."
+                    : row.online() ? "An online payment cannot be added to: an addition carries neither the security code nor the customer's approval."
+                    : "A refund cannot be added to.");
         }
         if (!row.status().equals("APPROVED") || row.batchId() != null) {
             throw new ConflictException("Only an approved payment that is not in a clearing file yet can be added to; this one is "
@@ -368,7 +394,7 @@ public final class AcquirerService {
 
     private Result result(UUID id, String status, String code, String authCode, String message, Message request, Message response) {
         return new Result(id, status, code, authCode, message, Redact.decoded(request), Redact.hexDump(request),
-                response == null ? null : Redact.decoded(response), response == null ? null : Redact.hexDump(response));
+                response == null ? null : Redact.decoded(response), response == null ? null : Redact.hexDump(response), challengeOf(response));
     }
 
     private static String clean(String pan) {

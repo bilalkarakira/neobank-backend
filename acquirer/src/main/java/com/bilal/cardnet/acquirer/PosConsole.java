@@ -29,7 +29,8 @@ import java.util.concurrent.Executors;
  * GET  /api/config            shops, demo card, acquirer and terminal ids
  * POST /api/pay               {pan, expiry, amount, merchantId, pin?}
  * POST /api/increase          {id, amount}  ask the bank for more on an approved payment (a pump that keeps filling)
- * POST /api/pay-online        {pan, expiry, cvv, amount, merchantId}  an online payment (no PIN, the security code instead)
+ * POST /api/pay-online        {pan, expiry, cvv, amount, merchantId[, authentication]}  an online payment (no PIN, the security code instead;
+ *                              "authentication" is the reference of the customer's approval, sent in DE 48 on the second try)
  * POST /api/withdraw          {pan, expiry, amount, pin}  a cash withdrawal at the cash machine (the PIN is required)
  * POST /api/resend            send the latest payment again (a duplicate)
  * POST /api/void              {id}
@@ -197,7 +198,7 @@ public final class PosConsole {
 
     private Map<String, Object> payOnline(Map<String, Object> in) {
         return resultMap(service.payOnline(new AcquirerService.OnlineRequest(text(in, "pan"), text(in, "expiry"), text(in, "cvv"), text(in, "amount"),
-                text(in, "merchantId"))));
+                text(in, "merchantId"), text(in, "authentication"))));
     }
 
     private Map<String, Object> withdraw(Map<String, Object> in) {
@@ -360,6 +361,7 @@ public final class PosConsole {
         map.put("requestHex", result.requestHex());
         map.put("responseText", result.responseText());
         map.put("responseHex", result.responseHex());
+        map.put("challenge", result.challenge());
         return map;
     }
 

@@ -153,6 +153,103 @@ class AcquirerOnlineTest {
         }
     }
 
+    // ---- the customer's approval ----
+
+    @Test
+    void theBanksRequestForApprovalReachesTheShopUnchangedWithItsReference() throws Exception {
+        try (AcqHarness h = new AcqHarness()) {
+            h.issuer.decision = m -> "1A";
+            h.issuer.challenge = m -> "3DS|K7M2QX";
+
+            AcquirerService.Result result = h.service().payOnline(online("80.00", CVV));
+
+            assertThat(result.status()).isEqualTo("DECLINED");
+            assertThat(result.responseCode()).isEqualTo("1A");
+            assertThat(result.challenge()).isEqualTo("K7M2QX");
+            assertThat(result.message()).contains("must approve").contains("K7M2QX").contains("pay again");
+            assertThat(result.responseText()).contains("3DS|K7M2QX");
+            assertThat(h.scalar("select status || '/' || response_code from acq_transactions")).isEqualTo("DECLINED/1A");
+            assertThat(h.issuer.holds()).isZero();
+        }
+    }
+
+    @Test
+    void aDeclineWithoutAChallengeShowsNoReference() throws Exception {
+        try (AcqHarness h = new AcqHarness()) {
+            h.issuer.decision = m -> "05";
+            h.issuer.challenge = m -> "HELLO";
+
+            AcquirerService.Result result = h.service().payOnline(online("80.00", CVV));
+
+            assertThat(result.challenge()).as("DE 48 that is not a reference").isNull();
+            assertThat(result.message()).contains("Declined (05)").doesNotContain("pay again");
+        }
+    }
+
+    @Test
+    void thePaymentTriedAgainCarriesTheReferenceInDe48AsANewPayment() throws Exception {
+        try (AcqHarness h = new AcqHarness()) {
+            AcquirerService.Result first = h.service().payOnline(online("80.00", CVV));
+            AcquirerService.Result again = h.service().payOnline(new AcquirerService.OnlineRequest(PAN, "10/29", CVV, "80.00", CAFE, "K7M2QX"));
+
+            Message sentFirst = h.issuer.received("0100").get(0);
+            Message sentAgain = h.issuer.received("0100").get(1);
+            assertThat(sentFirst.has(48)).isFalse();
+            assertThat(sentAgain.get(48)).isEqualTo("3DS|K7M2QX");
+            assertThat(sentAgain.get(11)).as("its own trace number").isNotEqualTo(sentFirst.get(11));
+            assertThat(sentAgain.get(37)).as("and retrieval reference").isNotEqualTo(sentFirst.get(37));
+            assertThat(sentAgain.get(53)).isEqualTo(CVV);
+            assertThat(again.id()).isNotEqualTo(first.id());
+            assertThat(h.service().store().request(again.id()).get(48)).as("the reference is no secret, it is kept").isEqualTo("3DS|K7M2QX");
+            assertThat(h.service().store().request(again.id()).has(53)).isFalse();
+        }
+    }
+
+    @Test
+    void aMalformedApprovalReferenceIsRefusedBeforeAnythingIsSent() throws Exception {
+        try (AcqHarness h = new AcqHarness()) {
+            for (String bad : new String[] {"abc", "TOOLONG123", "AB CD1", "AB-CD1", "3DS|ABC123", "ÄÖÜ123"}) {
+                assertThatThrownBy(() -> h.service().payOnline(new AcquirerService.OnlineRequest(PAN, "10/29", CVV, "80.00", CAFE, bad)))
+                        .as("'" + bad + "'").isInstanceOf(BadRequestException.class).hasMessageContaining("approval reference");
+            }
+            assertThat(h.issuer.received("0100")).isEmpty();
+            AcquirerService.Result blank = h.service().payOnline(new AcquirerService.OnlineRequest(PAN, "10/29", CVV, "5.00", CAFE, "  "));
+            assertThat(blank.status()).as("blank means none").isEqualTo("APPROVED");
+            assertThat(h.issuer.received("0100").get(0).has(48)).isFalse();
+        }
+    }
+
+    @Test
+    void anOnlinePaymentCannotBeAddedTo() throws Exception {
+        try (AcqHarness h = new AcqHarness()) {
+            UUID id = h.service().payOnline(online("20.00", CVV)).id();
+
+            assertThatThrownBy(() -> h.service().increase(new AcquirerService.IncreaseRequest(id, "5.00")))
+                    .isInstanceOf(AcquirerService.ConflictException.class).hasMessageContaining("online payment cannot be added to");
+            assertThat(h.issuer.received("0100")).as("nothing was sent").hasSize(1);
+        }
+    }
+
+    @Test
+    void theConsoleCarriesTheReferenceBothWays() throws Exception {
+        try (AcqHarness h = new AcqHarness()) {
+            h.issuer.decision = m -> m.has(48) ? "00" : "1A";
+            h.issuer.challenge = m -> "3DS|K7M2QX";
+            HttpClient http = HttpClient.newHttpClient();
+            String base = "http://127.0.0.1:" + h.acquirer.consolePort();
+            String body = "{\"pan\":\"" + PAN + "\",\"expiry\":\"10/29\",\"cvv\":\"" + CVV + "\",\"amount\":\"80.00\",\"merchantId\":\"" + CAFE + "\"%s}";
+
+            HttpResponse<String> first = http.send(post(base + "/api/pay-online", body.formatted("")), HttpResponse.BodyHandlers.ofString());
+            assertThat(first.body()).contains("\"responseCode\":\"1A\"").contains("\"challenge\":\"K7M2QX\"").doesNotContain(CVV);
+
+            HttpResponse<String> retry = http.send(post(base + "/api/pay-online", body.formatted(",\"authentication\":\"K7M2QX\"")), HttpResponse.BodyHandlers.ofString());
+            assertThat(retry.body()).contains("\"status\":\"APPROVED\"").contains("\"challenge\":null");
+
+            HttpResponse<String> bad = http.send(post(base + "/api/pay-online", body.formatted(",\"authentication\":\"no\"")), HttpResponse.BodyHandlers.ofString());
+            assertThat(bad.statusCode()).isEqualTo(400);
+        }
+    }
+
     @Test
     void theConsoleTakesAnOnlinePaymentAndNeverEchoesTheCode() throws Exception {
         try (AcqHarness h = new AcqHarness()) {

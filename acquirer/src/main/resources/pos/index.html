@@ -352,18 +352,33 @@
       });
   });
 
-  $('web-form').addEventListener('submit', function (e) {
-    e.preventDefault();
+  // The shop keeps the form while the customer approves in the bank's app; "pay again" sends the same payment with the approval reference.
+  function payOnline(authentication) {
     var button = $('web-go'); button.disabled = true;
     var box = $('web-result'); clear(box); box.appendChild(el('div', 'banner REVERSING', 'Waiting for the bank…'));
-    api('POST', '/api/pay-online', { pan: $('web-pan').value, expiry: $('web-expiry').value, cvv: $('web-cvv').value, amount: $('web-amount').value, merchantId: $('web-shop').value })
+    var body = { pan: $('web-pan').value, expiry: $('web-expiry').value, cvv: $('web-cvv').value, amount: $('web-amount').value, merchantId: $('web-shop').value };
+    if (authentication) body.authentication = authentication;
+    api('POST', '/api/pay-online', body)
       .then(function (r) {
         clear(box);
-        var kind = r.status !== 200 ? 'DECLINED' : r.json.status === 'APPROVED' ? 'APPROVED' : r.json.status === 'REVERSING' ? 'REVERSING' : 'DECLINED';
+        var challenge = r.status === 200 && r.json.challenge ? r.json.challenge : null;
+        var kind = r.status !== 200 ? 'DECLINED' : r.json.status === 'APPROVED' ? 'APPROVED' : r.json.status === 'REVERSING' ? 'REVERSING' : challenge ? 'REVERSING' : 'DECLINED';
         box.appendChild(el('div', 'banner ' + kind, r.status === 200 ? r.json.message : (r.json.error || 'The payment could not be sent.')));
-        $('web-cvv').value = '';
+        if (challenge) {
+          var again = el('button', 'primary', 'I approved it in the app: pay again');
+          again.type = 'button'; again.id = 'web-retry';
+          again.addEventListener('click', function () { payOnline(challenge); });
+          box.appendChild(again);
+        } else {
+          $('web-cvv').value = ''; // the code is only kept on the form while an approval is awaited
+        }
         button.disabled = false; loadTransactions(); loadNetwork();
       });
+  }
+
+  $('web-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    payOnline(null);
   });
 
   $('web-demo').addEventListener('click', function () {

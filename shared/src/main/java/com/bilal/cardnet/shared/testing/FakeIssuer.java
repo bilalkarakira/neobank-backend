@@ -51,6 +51,8 @@ public final class FakeIssuer implements AutoCloseable {
 
     /** The response code each payment gets (0100 and 0200). Default: approve everything. */
     public volatile Function<Message, String> decision = m -> "00";
+    /** DE 48 of a declined payment's answer (the bank's request for the customer's approval), or null for none. */
+    public volatile Function<Message, String> challenge = m -> null;
     /** Payments are answered this long AFTER they were processed (a slow issuer: it did decide). */
     public volatile long responseDelayMs;
     /** Payments are processed but never answered. */
@@ -256,7 +258,11 @@ public final class FakeIssuer implements AutoCloseable {
         entries.put(key, new Entry(key, request.get(2), Messages.padAcquirer(request.get(32)), request.get(11), request.get(7),
                 amount, auth != null ? Status.AUTHORIZED : Status.DECLINED, code, auth, false));
         Message response = Messages.response(request, code);
-        return auth == null ? response : response.set(38, auth);
+        if (auth == null) {
+            String data = challenge.apply(request);
+            return data == null ? response : response.set(48, data);
+        }
+        return response.set(38, auth);
     }
 
     private synchronized Message reversal(Message request) {

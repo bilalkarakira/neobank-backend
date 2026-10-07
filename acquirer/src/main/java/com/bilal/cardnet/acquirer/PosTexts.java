@@ -10,6 +10,7 @@ public final class PosTexts {
         return switch (code) {
             case "00" -> "Approved.";
             case "05" -> "The bank did not approve this payment.";
+            case "1A" -> "The customer has to approve this online payment in the bank's app first.";
             case "12" -> "The bank cannot add to this payment (closed, limit reached or too much).";
             case "13" -> "The payment request was not valid.";
             case "14" -> "The card details did not match.";
