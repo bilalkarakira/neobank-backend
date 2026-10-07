@@ -79,6 +79,26 @@ public class NotificationService {
     }
 
     @Transactional
+    public void disputeFiled(UUID userId, String merchant, String amount) {
+        insert(userId, "DISPUTE_FILED", "Your card dispute was filed",
+                "You disputed a card payment at %s. %s was credited to your account for now while the card network looks into it. The credit becomes final if the shop does not answer in time."
+                        .formatted(merchant, amount));
+    }
+
+    @Transactional
+    public void disputeWon(UUID userId, String merchant, String amount) {
+        insert(userId, "DISPUTE_WON", "You won your card dispute",
+                "The shop did not answer your dispute of the payment at %s. The %s credit is final.".formatted(merchant, amount));
+    }
+
+    @Transactional
+    public void disputeLost(UUID userId, String merchant, String amount, String why) {
+        insert(userId, "DISPUTE_LOST", "You lost your card dispute",
+                "Your dispute of the payment at %s was not successful: %s. %s was taken from your account again."
+                        .formatted(merchant, why, amount));
+    }
+
+    @Transactional
     public void passwordChanged(UUID userId) {
         insert(userId, "PASSWORD_CHANGED", "Your password was changed",
                 "Your password was changed on %s and every other device was signed out. If this was not you, contact support."

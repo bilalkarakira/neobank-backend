@@ -104,6 +104,9 @@ public class HistoryService {
                 case CARD_REFUND -> "Card refund";
                 case CARD_COLLECTION -> "Card payment repaid";
                 case CARD_SHORTFALL -> "Card payment";
+                case CARD_PROVISIONAL -> "Card dispute credit";
+                case CARD_REPRESENTED -> "Card dispute lost";
+                case CARD_CREDIT_REVERSED -> "Card dispute credit reversed";
                 default -> "Cash deposit";
             };
             return new Counterparty(label, null, false);

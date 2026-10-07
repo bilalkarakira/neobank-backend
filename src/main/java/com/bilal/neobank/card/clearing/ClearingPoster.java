@@ -85,8 +85,8 @@ public class ClearingPoster {
         String merchant = merchant(m);
 
         int inserted = jdbc.sql("""
-                insert into clearing_items (id, file_id, record_no, kind, amount, last4, merchant_name, result, created_at)
-                values (:id, :file, :rec, :kind, :amount, :last4, :merchant, 'PENDING', :now)
+                insert into clearing_items (id, file_id, record_no, kind, amount, last4, merchant_name, result, created_at, business_date)
+                values (:id, :file, :rec, :kind, :amount, :last4, :merchant, 'PENDING', :now, (select business_date from clearing_files where id = :file))
                 on conflict (file_id, record_no) do nothing
                 """).param("id", itemId).param("file", fileId).param("rec", recordNo).param("kind", refund ? "REFUND" : "PURCHASE")
                 .param("amount", amount).param("last4", last4).param("merchant", merchant).param("now", Timestamp.from(now)).update();

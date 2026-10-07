@@ -1,5 +1,6 @@
 package com.bilal.neobank.card.clearing;
 
+import com.bilal.neobank.card.dispute.DisputeProperties;
 import com.bilal.neobank.ledger.SystemAccounts;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -46,10 +47,12 @@ public class SettlementReconciliation {
     }
 
     private final JdbcClient jdbc;
+    private final DisputeProperties disputes;
     private final Clock clock;
 
-    public SettlementReconciliation(JdbcClient jdbc, Clock clock) {
+    public SettlementReconciliation(JdbcClient jdbc, DisputeProperties disputes, Clock clock) {
         this.jdbc = jdbc;
+        this.disputes = disputes;
         this.clock = clock;
     }
 
@@ -118,16 +121,39 @@ public class SettlementReconciliation {
             }
         }
 
+        // disputes: a chargeback the network refused, a representment that came after the dispute was won, a dispute stuck too long
+        findings.addAll(jdbc.sql("""
+                select i.business_date, i.last4, i.amount, coalesce(i.reason, '') from clearing_items i
+                where i.result = 'CHARGEBACK_REFUSED' and (cast(:d as date) is null or i.business_date = :d) order by i.business_date, i.created_at
+                """).param("d", date).query((rs, i) -> new Finding("CHARGEBACK_REFUSED", rs.getObject(1, LocalDate.class), rs.getString(2),
+                "chargeback " + money(rs.getBigDecimal(3)), "refused", "The card network refused a chargeback of " + money(rs.getBigDecimal(3)) + ": "
+                        + rs.getString(4) + ". The customer's credit was taken back.")).list());
+        findings.addAll(jdbc.sql("""
+                select i.business_date, i.last4, i.amount from card_disputes d join clearing_items i on i.id = d.representment_item_id
+                where d.late_representment and (cast(:d as date) is null or i.business_date = :d) order by i.business_date, i.created_at
+                """).param("d", date).query((rs, i) -> new Finding("LATE_REPRESENTMENT", rs.getObject(1, LocalDate.class), rs.getString(2),
+                "dispute won", "represented " + money(rs.getBigDecimal(3)), "The shop answered a dispute that was already won; the network accepted it, so the customer was debited "
+                        + money(rs.getBigDecimal(3)) + " again and the dispute is now lost.")).list());
+        findings.addAll(jdbc.sql("""
+                select cast(d.filed_at at time zone 'UTC' as date), d.last4, d.amount, d.status from card_disputes d
+                where ((d.status = 'FILED' and d.filed_at <= :cutoff1) or (d.status = 'OPEN' and d.opened_at <= :cutoff2))
+                  and (cast(:d as date) is null or cast(d.filed_at at time zone 'UTC' as date) = :d) order by d.filed_at
+                """).param("d", date).param("cutoff1", Timestamp.from(clock.instant().minus(disputes.window())))
+                .param("cutoff2", Timestamp.from(clock.instant().minus(disputes.window().multipliedBy(2))))
+                .query((rs, i) -> new Finding("DISPUTE_OPEN_TOO_LONG", rs.getObject(1, LocalDate.class), rs.getString(2), "dispute " + rs.getString(4).toLowerCase(),
+                        "no outcome", "A dispute of " + money(rs.getBigDecimal(3)) + " has been " + rs.getString(4).toLowerCase() + " for longer than expected.")).list());
+
         // cleared but not settled: not an exception, just not finished
         List<Waiting> waiting = jdbc.sql("""
-                select f.business_date, i.last4, i.kind, i.amount, i.merchant_name from clearing_items i join clearing_files f on f.id = i.file_id
-                where i.settlement_run_id is null and i.result in ('POSTED', 'FORCE_POSTED', 'REFUND_POSTED')
-                  and (cast(:d as date) is null or f.business_date = :d) order by f.business_date, i.record_no
+                select i.business_date, i.last4, i.kind, i.amount, i.merchant_name from clearing_items i
+                where i.settlement_run_id is null
+                  and i.result in ('POSTED', 'FORCE_POSTED', 'REFUND_POSTED', 'CHARGEBACK_POSTED', 'REPRESENTMENT_POSTED')
+                  and (cast(:d as date) is null or i.business_date = :d) order by i.business_date, i.created_at
                 """).param("d", date).query((rs, i) -> new Waiting(rs.getObject(1, LocalDate.class), rs.getString(2), rs.getString(3),
                 money(rs.getBigDecimal(4)), rs.getString(5))).list();
 
         Totals totals = totals(date, now, waiting, findings);
-        List<LocalDate> dates = jdbc.sql("select distinct business_date from clearing_files where business_date is not null order by business_date desc limit 60")
+        List<LocalDate> dates = jdbc.sql("select distinct business_date from clearing_items where business_date is not null order by business_date desc limit 60")
                 .query(LocalDate.class).list();
         List<RunRow> runs = jdbc.sql("""
                 select run_number, file_name, business_date, value_date, status, purchases, refunds, interchange, scheme_fee, net, item_count, reason, received_at
@@ -156,7 +182,8 @@ public class SettlementReconciliation {
         BigDecimal payable = jdbc.sql("select balance from accounts where id = :id").param("id", SystemAccounts.CARD_SETTLEMENT).query(BigDecimal.class).single();
         // the card settlement account holds what is cleared and not yet paid out: posted net less the gross of every matched run
         BigDecimal postedNet = jdbc.sql("""
-                select coalesce(sum(case when result in ('POSTED', 'FORCE_POSTED') then amount when result = 'REFUND_POSTED' then -amount else 0 end), 0)
+                select coalesce(sum(case when result in ('POSTED', 'FORCE_POSTED', 'REPRESENTMENT_POSTED') then amount
+                                         when result in ('REFUND_POSTED', 'CHARGEBACK_SENT', 'CHARGEBACK_POSTED') then -amount else 0 end), 0)
                 from clearing_items
                 """).query(BigDecimal.class).single();
         BigDecimal settledGross = jdbc.sql("select coalesce(sum(purchases - refunds), 0) from settlement_runs where status = 'MATCHED'")

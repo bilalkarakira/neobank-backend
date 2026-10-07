@@ -84,10 +84,11 @@ public class SettlementPoster {
         record Item(UUID id, boolean refund, BigDecimal amount) {
         }
         List<Item> items = jdbc.sql("""
-                select i.id, i.kind, i.amount from clearing_items i join clearing_files f on f.id = i.file_id
-                where i.settlement_run_id is null and i.result in ('POSTED', 'FORCE_POSTED', 'REFUND_POSTED') and f.business_date = :d
+                select i.id, i.kind, i.amount from clearing_items i
+                where i.settlement_run_id is null
+                  and i.result in ('POSTED', 'FORCE_POSTED', 'REFUND_POSTED', 'CHARGEBACK_POSTED', 'REPRESENTMENT_POSTED') and i.business_date = :d
                 order by i.id for update of i
-                """).param("d", s.businessDate()).query((rs, i) -> new Item(rs.getObject(1, UUID.class), "REFUND".equals(rs.getString(2)),
+                """).param("d", s.businessDate()).query((rs, i) -> new Item(rs.getObject(1, UUID.class), refundLike(rs.getString(2)),
                 rs.getBigDecimal(3))).list();
         BigDecimal purchases = BigDecimal.ZERO;
         BigDecimal refunds = BigDecimal.ZERO;
@@ -133,6 +134,11 @@ public class SettlementPoster {
         // 3. the scheme fee paid, out of that income
         move(id, 3, "scheme fee", SystemAccounts.INTERCHANGE_INCOME, SystemAccounts.SETTLEMENT_BANK, schemeFee, s.runNumber());
         return finish(id, "MATCHED", null, own);
+    }
+
+    /** A refund and a chargeback take money back from the shop's bank; a purchase and a representment give it. */
+    private static boolean refundLike(String kind) {
+        return "REFUND".equals(kind) || "CHARGEBACK".equals(kind);
     }
 
     private record Own(BigDecimal purchases, BigDecimal refunds, BigDecimal interchange, BigDecimal schemeFee, BigDecimal net, int count) {

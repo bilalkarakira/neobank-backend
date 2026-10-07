@@ -195,6 +195,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, "Card not found", ex.getMessage(), "CARD_NOT_FOUND");
     }
 
+    @ExceptionHandler(com.bilal.neobank.card.dispute.DisputeExceptions.NotFoundException.class)
+    ProblemDetail handleDisputeNotFound(com.bilal.neobank.card.dispute.DisputeExceptions.NotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Payment not found", ex.getMessage(), "DISPUTE_PAYMENT_NOT_FOUND");
+    }
+
+    @ExceptionHandler(com.bilal.neobank.card.dispute.DisputeExceptions.NotAllowedException.class)
+    ProblemDetail handleDisputeNotAllowed(com.bilal.neobank.card.dispute.DisputeExceptions.NotAllowedException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Cannot dispute this payment", ex.getMessage(), "DISPUTE_NOT_ALLOWED");
+    }
+
     @ExceptionHandler(CardExceptions.CardLimitReachedException.class)
     ProblemDetail handleCardLimit(CardExceptions.CardLimitReachedException ex) {
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Card limit reached", ex.getMessage(), "CARD_LIMIT_REACHED");

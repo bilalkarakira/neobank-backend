@@ -14,5 +14,11 @@ public enum TransactionType {
     /** The customer's money used to pay off a card shortfall. */
     CARD_COLLECTION,
     /** Settlement of a business day of cleared card payments with the settlement bank (system only). */
-    CARD_SETTLEMENT
+    CARD_SETTLEMENT,
+    /** Provisional credit when a customer disputes a cleared card payment: the card settlement account to the customer. */
+    CARD_PROVISIONAL,
+    /** The customer is debited again because the shop proved its case (a representment). */
+    CARD_REPRESENTED,
+    /** The provisional credit taken back because the network refused the chargeback. */
+    CARD_CREDIT_REVERSED
 }
