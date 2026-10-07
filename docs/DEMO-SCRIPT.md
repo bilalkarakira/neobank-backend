@@ -49,6 +49,15 @@ pays notes of 10, and the bank applies its own cash limits (300 per withdrawal, 
 *Bank, Cards:* the withdrawal is marked **Cash withdrawal**, pending until the day is closed, then posted like a payment.
 *Lesson: a cash withdrawal is the same authorization with another processing code (01), a mandatory PIN and its own limits.*
 
+## 5c. A fuel pump that tops up (1 minute)
+
+*Shop page:* pay 50 at the **Gas Station** with the PIN, then in the payment list type 25 under **add amount** and press **Add to payment**:
+the bank approves it and the payment now reads "50.00 + 25.00". Try adding 2500: the bank refuses (code 12, the total would pass its limit).
+Type the real amount the pump used (for example 61.40) under **final amount** and press **Set amount**, then **Close the day**.
+*Bank, Cards:* the 25.00 addition shows as a pending hold "Added to an earlier payment"; after clearing the payment is posted for 61.40
+and the addition reads "Added to the main payment". *Lesson: an incremental authorization is an authorization of its own that points at the
+first one; clearing is for the final amount, and every hold of the payment ends with it.*
+
 ## 6. A dispute (2 minutes)
 
 *Bank, Cards:* under **Posted**, press **Dispute this payment**, choose a reason and send. The amount is **credited at once**

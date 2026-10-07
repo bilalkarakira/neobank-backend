@@ -148,6 +148,15 @@ and always the PIN. NeoBank refuses cash without a PIN, over 300 per withdrawal,
 counts toward the card's normal daily limit). The network's stand-in never approves cash. At the end of the day the withdrawal
 clears and settles like a purchase.
 
+### 3c. A pump that tops up (incremental authorizations)
+
+A shop that does not know the final price (a fuel pump, a hotel) asks for a first authorization and may later ask for **more** on the
+same payment: a new authorization whose DE 90 names the first one and whose amount is only the extra. NeoBank holds each addition
+as an authorization of its own (so duplicates, expiry and reversal work as for any authorization) after checking the link: the first
+one must still hold its money, be the same terminal and merchant, not be cash, have fewer than five additions, and the total must
+stay within the per-transaction cap. At the end of the day the shop clears the **first** authorization for the final amount, and the
+additions stop holding money.
+
 ### 4. Disputes: chargebacks and representments
 
 A customer disputes a posted payment. The bank **credits the amount at once** (provisional credit) and sends a **chargeback**

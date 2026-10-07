@@ -31,6 +31,7 @@ public class Scenario {
     static final String NET = env("NET", "http://127.0.0.1:9100");
     static final String CAFE = "MERCHANT0000001";
     static final String CASINO = "MERCHANT0000004";
+    static final String GAS = "MERCHANT0000002";
 
     static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
     static final List<String> failures = new ArrayList<>();
@@ -121,7 +122,20 @@ public class Scenario {
         expect("the bank approved 100.00 in cash", "APPROVED".equals(field(cash, "status")));
         expect("NeoBank marks it as a cash withdrawal", contains(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken), "\"cash\":true"));
 
-        step("10. End of the shop's day: CLEARING. The shop's bank sends one file with the final amounts");
+        step("10. A fuel pump: 50.00 is authorized first, the pump asks for 25.00 more, and an addition that is too much is refused");
+        String pump = pay("50.00", GAS, pin);
+        expect("the pump's first authorization is approved", "APPROVED".equals(field(pump, "status")));
+        String pumpId = field(pump, "id");
+        String addition = post(POS + "/api/increase", "{\"id\":\"" + pumpId + "\",\"amount\":\"25.00\"}");
+        expect("the bank approved 25.00 more: 75.00 is now authorized", "APPROVED".equals(field(addition, "status")) && contains(addition, "75.00 is now authorized"));
+        String tooMuchMore = post(POS + "/api/increase", "{\"id\":\"" + pumpId + "\",\"amount\":\"2500.00\"}");
+        expect("the bank refuses an addition that would take the payment over its 2,500.00 limit (code 12)",
+                "DECLINED".equals(field(tooMuchMore, "status")) && "12".equals(field(tooMuchMore, "responseCode")));
+        expect("NeoBank holds the 25.00 addition as a pending hold of its own", contains(get(BANK + "/api/cards/" + cardId + "/authorizations?pending=true", demoToken), "\"amount\":\"25.00\""));
+        String pumpFinal = post(POS + "/api/adjust", "{\"id\":\"" + pumpId + "\",\"amount\":\"61.40\"}");
+        expect("the pump used less than it asked for: the payment will clear for 61.40", "61.40".equals(field(pumpFinal, "finalAmount")));
+
+        step("11. End of the shop's day: CLEARING. The shop's bank sends one file with the final amounts");
         int postedBefore = captured();
         String close = post(POS + "/api/close-day", "");
         System.out.println("   " + field(close, "message"));
@@ -129,16 +143,19 @@ public class Scenario {
         expect("a clearing file was sent", batchFile != null);
         waitUntil("the network accepted the file", () -> "ACCEPTED".equals(batchStatus(batchFile)), 60);
         expect("the network accepted it (and NeoBank answered for every item)", "ACCEPTED".equals(batchStatus(batchFile)));
-        waitUntil("NeoBank posted the cleared payments", () -> captured() >= postedBefore + 5, 60);
-        expect("NeoBank POSTED the cleared payments (25.00, 5.00, 46.00, the stand-in 20.00 and the 100.00 cash): holds became real debits", captured() >= postedBefore + 5);
+        waitUntil("NeoBank posted the cleared payments", () -> captured() >= postedBefore + 6, 60);
+        expect("NeoBank POSTED the cleared payments (25.00, 5.00, 46.00, the stand-in 20.00, the 100.00 cash and the 61.40 pump): holds became real debits", captured() >= postedBefore + 6);
+        String afterClearing = get(BANK + "/api/cards/" + cardId + "/authorizations?size=50", demoToken);
+        expect("the pump cleared for 61.40, the total it really used", contains(afterClearing, "\"capturedAmount\":\"61.40\""));
+        expect("the 25.00 addition no longer holds money: it was merged into the pump payment", contains(afterClearing, "\"status\":\"MERGED\""));
         expect("the tip was taken: the dinner posted 46.00", contains(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken), "\"capturedAmount\":\"46.00\""));
         waitUntil("the shop sees its payments cleared", () -> "CLEARED".equals(posStatus(coffeeId)) && "CLEARED".equals(posStatus(standInId)), 30);
 
-        step("11. A refund of 10.00 for the 25.00 purchase");
+        step("12. A refund of 10.00 for the 25.00 purchase");
         String refund = post(POS + "/api/refund", "{\"id\":\"" + coffeeId + "\",\"amount\":\"10.00\"}");
         expect("the refund is recorded and goes out with the next clearing file", "REFUND_DUE".equals(field(refund, "status")));
 
-        step("12. END OF DAY: the refund is cleared, then the network SETTLES the day between the banks (net amounts)");
+        step("13. END OF DAY: the refund is cleared, then the network SETTLES the day between the banks (net amounts)");
         String close2 = post(POS + "/api/close-day", "");
         String file2 = field(close2, "fileName");
         waitUntil("the refund file was accepted", () -> "ACCEPTED".equals(batchStatus(file2)), 60);
@@ -162,7 +179,7 @@ public class Scenario {
             expect("NeoBank checked the figures itself and MATCHED " + run, matched(run));
         }
 
-        step("13. DISPUTE 1: the customer says the 46.00 dinner never arrived; the shop's bank answers with evidence");
+        step("14. DISPUTE 1: the customer says the 46.00 dinner never arrived; the shop's bank answers with evidence");
         BigDecimal ledgerBefore = ledger();
         String dinnerAuthorization = find(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken),
                 "(?s)\\{\"id\":\"([^\"]+)\"(?:(?!\\{\"id\").)*?\"capturedAmount\":\"46\\.00\"");
@@ -180,14 +197,14 @@ public class Scenario {
         expect("the shop proved its case: the customer LOST the dispute", "LOST".equals(disputeStatus(dinnerAuthorization)));
         expect("the 46.00 was taken from the customer again", ledger().compareTo(ledgerBefore) == 0);
 
-        step("14. DISPUTE 2: another payment is disputed and nobody answers: after the window the customer WINS");
+        step("15. DISPUTE 2: another payment is disputed and nobody answers: after the window the customer WINS");
         String coffeeDispute = post(BANK + "/api/cards/payments/" + coffeeAuthorizationId() + "/dispute", "{\"reason\":\"UNAUTHORIZED\",\"note\":\"I did not make this payment\"}", demoToken);
         expect("the second dispute is filed", "FILED".equals(field(coffeeDispute, "status")));
         String coffeeAuth = field(coffeeDispute, "authorizationId");
         waitUntil("the second dispute was won", () -> "WON".equals(disputeStatus(coffeeAuth)), 120);
         expect("nobody answered in time: the customer WON and the credit is final", "WON".equals(disputeStatus(coffeeAuth)));
 
-        step("15. The chargebacks and the representment are settled between the banks like refunds and purchases");
+        step("16. The chargebacks and the representment are settled between the banks like refunds and purchases");
         List<String> disputeRuns = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             String run = post(NET + "/settlement/run", "");
@@ -203,7 +220,7 @@ public class Scenario {
             expect("NeoBank checked the figures itself and MATCHED " + run, matched(run));
         }
 
-        step("16. What NeoBank says about all of it (admin views)");
+        step("17. What NeoBank says about all of it (admin views)");
         String clearing = get(BANK + "/api/admin/clearing", adminToken);
         System.out.println("   clearing books check: " + find(clearing, "\"booksMatch\":(true|false)") + ", owed to the card network " + find(clearing, "\"settlementPayable\":\"([^\"]+)\""));
         expect("the clearing books agree with the posted items", contains(clearing, "\"booksMatch\":true"));
