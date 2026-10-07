@@ -141,6 +141,13 @@ its scheme fee*, the network keeps both scheme fees: the three add up to zero. T
 statement per participant, with a value date (next business day). NeoBank **recomputes the figures itself** from the items it
 posted before posting anything: a statement that does not agree is *disputed*, not trusted.
 
+### 3b. Cash at a cash machine
+
+A cash machine is a terminal with its own merchant category (6011) that sends the same authorization with **processing code 01**
+and always the PIN. NeoBank refuses cash without a PIN, over 300 per withdrawal, or over 500 of cash per card per day (the cash also
+counts toward the card's normal daily limit). The network's stand-in never approves cash. At the end of the day the withdrawal
+clears and settles like a purchase.
+
 ### 4. Disputes: chargebacks and representments
 
 A customer disputes a posted payment. The bank **credits the amount at once** (provisional credit) and sends a **chargeback**

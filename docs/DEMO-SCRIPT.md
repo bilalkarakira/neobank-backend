@@ -42,6 +42,13 @@ issuer, the acquirer and the network (they add up to zero).
 (authorized, cleared, settled) and the differences list: the tip shows up as "Amount changed". *Lesson: reconciliation is
 three records that must agree, and every difference has a plain explanation.*
 
+## 5b. Cash (1 minute)
+
+*Shop page, Cash machine:* **Use the demo card** and withdraw 100: the PIN is required (try without it: the machine refuses), the machine
+pays notes of 10, and the bank applies its own cash limits (300 per withdrawal, 500 per day: try 400 and read the refusal, code 61).
+*Bank, Cards:* the withdrawal is marked **Cash withdrawal**, pending until the day is closed, then posted like a payment.
+*Lesson: a cash withdrawal is the same authorization with another processing code (01), a mandatory PIN and its own limits.*
+
 ## 6. A dispute (2 minutes)
 
 *Bank, Cards:* under **Posted**, press **Dispute this payment**, choose a reason and send. The amount is **credited at once**
