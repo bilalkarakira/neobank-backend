@@ -63,6 +63,8 @@ app:
     velocity-window: 10m
     cash-per-withdrawal-max: 300.00   # the cash machine: the most for one withdrawal ...
     max-increments: 5                 # how many times a shop may ask for more on one authorization (a pump, a hotel)
+    sca-threshold: 30.00              # an online payment of MORE than this needs the customer's approval in the app ...
+    sca-ttl: 5m                       # ... and that request stays open this long
     cash-daily-limit: 500.00          # ... and the most cash per card per UTC day (cash also counts toward the card's daily limit)
     hold-ttl: 7d                 # an authorization stops reserving money after this, unless cleared
     max-pin-failures: 3

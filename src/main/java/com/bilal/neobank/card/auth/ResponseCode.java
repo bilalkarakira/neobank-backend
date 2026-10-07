@@ -17,6 +17,7 @@ public final class ResponseCode {
     public static final String VELOCITY = "65";
     public static final String PIN_TRIES_EXCEEDED = "75";
     public static final String WRONG_SECURITY_CODE = "N7";
+    public static final String AUTHENTICATION_REQUIRED = "1A";
     public static final String ISSUER_UNAVAILABLE = "91";
     public static final String DUPLICATE = "94";
     public static final String SYSTEM_ERROR = "96";
@@ -40,6 +41,7 @@ public final class ResponseCode {
             case EXCEEDS_LIMIT -> "Over the card's spending limit.";
             case VELOCITY -> "Too many payments in a short time.";
             case PIN_TRIES_EXCEEDED -> "Too many wrong PINs or security codes: the card was frozen.";
+            case AUTHENTICATION_REQUIRED -> "This online payment needs your approval in the NeoBank app. Approve it there, then the shop must try again.";
             case WRONG_SECURITY_CODE -> "The security code was wrong or missing.";
             case ISSUER_UNAVAILABLE -> "The bank could not take card payments at that moment.";
             case DUPLICATE -> "Repeated payment request with different details.";

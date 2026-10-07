@@ -74,7 +74,10 @@ public class IssuerMessageHandler {
             }
             parent = new ParentRef(ref.substring(4, 10), ref.substring(10, 20));
         }
-        AuthInput input = new AuthInput(request.get(2), request.get(14), request.get(52), fields, parent, request.get(53));
+        // DE 48 "3DS|<reference>" is the proof of the customer's approval of an online payment; anything else in DE 48 is not a proof
+        String data = request.get(48);
+        String proof = data != null && data.startsWith("3DS|") && data.length() > 4 ? data.substring(4).strip() : null;
+        AuthInput input = new AuthInput(request.get(2), request.get(14), request.get(52), fields, parent, request.get(53), proof);
         return respond(request, issuer.authorize(input));
     }
 
@@ -150,6 +153,9 @@ public class IssuerMessageHandler {
         }
         if (decision.authCode() != null) {
             response.set(38, decision.authCode());
+        }
+        if (decision.challenge() != null) {
+            response.set(48, decision.challenge());
         }
         return response.set(39, decision.code());
     }

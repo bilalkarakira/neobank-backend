@@ -10,6 +10,9 @@ import com.bilal.neobank.card.CardRepository;
 import com.bilal.neobank.card.CardStatus;
 import com.bilal.neobank.card.FreezeReason;
 import com.bilal.neobank.card.clearing.CardReceivables;
+import com.bilal.neobank.card.sca.CardAuthentication;
+import com.bilal.neobank.card.sca.CardAuthenticationRepository;
+import com.bilal.neobank.card.sca.CardAuthenticationService;
 import com.bilal.neobank.card.Luhn;
 import com.bilal.neobank.notification.NotificationService;
 import jakarta.persistence.EntityManager;
@@ -40,15 +43,20 @@ public class AuthorizationEngine {
      * What the issuer needs from an authorization request, already parsed from the message. {@code cvv} is the security code of an online
      * payment (DE 53); it is only compared with the hash and never stored or logged.
      */
-    public record AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request, ParentRef parent, String cvv) {
+    public record AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request, ParentRef parent, String cvv,
+            String authenticationReference) {
 
         /** An authorization that tops up nothing and has no security code. */
         public AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request) {
-            this(pan, expiry, pinBlock, request, null, null);
+            this(pan, expiry, pinBlock, request, null, null, null);
         }
 
         public AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request, ParentRef parent) {
-            this(pan, expiry, pinBlock, request, parent, null);
+            this(pan, expiry, pinBlock, request, parent, null, null);
+        }
+
+        public AuthInput(String pan, String expiry, String pinBlock, Authorization.Request request, ParentRef parent, String cvv) {
+            this(pan, expiry, pinBlock, request, parent, cvv, null);
         }
     }
 
@@ -65,8 +73,13 @@ public class AuthorizationEngine {
             Authorization.Request request) {
     }
 
-    /** The answer: DE39 and, for an approval, the authorization code (DE38). */
-    public record Decision(String code, String authCode) {
+    /** The answer: DE39 and, for an approval, the authorization code (DE38); {@code challenge} is DE 48 of a 1A answer (3DS|reference). */
+    public record Decision(String code, String authCode, String challenge) {
+
+        public Decision(String code, String authCode) {
+            this(code, authCode, null);
+        }
+
         public boolean approved() {
             return ResponseCode.APPROVED.equals(code);
         }
@@ -84,11 +97,16 @@ public class AuthorizationEngine {
     private final EntityManager entityManager;
     private final Clock clock;
     private final CardReceivables receivables;
+    private final CardAuthenticationRepository authentications;
+    private final CardAuthenticationService authenticationService;
 
     public AuthorizationEngine(CardRepository cardRepository, AuthorizationRepository authorizationRepository,
             HoldService holdService, CardCrypto crypto, CardProperties properties,
-            NotificationService notifications, EntityManager entityManager, Clock clock, CardReceivables receivables) {
+            NotificationService notifications, EntityManager entityManager, Clock clock, CardReceivables receivables,
+            CardAuthenticationRepository authentications, CardAuthenticationService authenticationService) {
         this.receivables = receivables;
+        this.authentications = authentications;
+        this.authenticationService = authenticationService;
         this.cardRepository = cardRepository;
         this.authorizationRepository = authorizationRepository;
         this.holdService = holdService;
@@ -191,6 +209,22 @@ public class AuthorizationEngine {
                 return decline(card, account, panHash, last4, r, cvvCode, now);
             }
         }
+        // 7e. an online payment above the threshold needs the customer's approval of exactly this payment (the proof comes in DE 48)
+        CardAuthentication proof = null;
+        if (online && r.amount().compareTo(properties.scaThreshold()) > 0) {
+            Optional<CardAuthentication> given = in.authenticationReference() == null ? Optional.empty()
+                    : authentications.findByReference(in.authenticationReference());
+            if (given.isPresent() && given.get().getStatus() == CardAuthentication.Status.REJECTED && fits(given.get(), card, r)) {
+                return decline(card, account, panHash, last4, r, ResponseCode.DO_NOT_HONOUR, now);
+            }
+            if (given.isEmpty() || !usable(given.get(), card, r, now)) {
+                CardAuthentication asked = authenticationService.challenge(card, r.merchantId(), r.merchantName(), r.amount(), now);
+                authorizationRepository.saveAndFlush(Authorization.declined(card.getId(), account.getId(), panHash, last4, r,
+                        ResponseCode.AUTHENTICATION_REQUIRED, now));
+                return new Decision(ResponseCode.AUTHENTICATION_REQUIRED, null, "3DS|" + asked.getReference());
+            }
+            proof = given.get();
+        }
         // 8. PIN (only when one was sent): before limits and funds, so a caller without the PIN learns nothing about money
         if (in.pinBlock() != null) {
             String pinCode = checkPin(card, in.pan(), in.pinBlock());
@@ -228,10 +262,30 @@ public class AuthorizationEngine {
         if (parent != null) {
             approved.incrementOf(parent.getId());
         }
+        // the approval is used up in the same transaction as the authorization; the account lock makes two requests with one approval queue up
+        if (proof != null && authentications.markUsed(proof.getId(), now) != 1) {
+            CardAuthentication asked = authenticationService.challenge(card, r.merchantId(), r.merchantName(), r.amount(), now);
+            authorizationRepository.saveAndFlush(Authorization.declined(card.getId(), account.getId(), panHash, last4, r,
+                    ResponseCode.AUTHENTICATION_REQUIRED, now));
+            return new Decision(ResponseCode.AUTHENTICATION_REQUIRED, null, "3DS|" + asked.getReference());
+        }
         if (!holdService.tryReserve(approved)) {
+            if (proof != null) {
+                authentications.release(proof.getId()); // nothing was paid: the customer's approval is not wasted
+            }
             return decline(card, account, panHash, last4, r, ResponseCode.INSUFFICIENT_FUNDS, now);
         }
         return new Decision(ResponseCode.APPROVED, authCode);
+    }
+
+    /** The approval is for this card, this amount and this shop (whatever its state). */
+    private static boolean fits(CardAuthentication a, Card card, Authorization.Request r) {
+        return a.getCardId().equals(card.getId()) && a.getAmount().compareTo(r.amount()) == 0 && a.getMerchantId().equals(r.merchantId());
+    }
+
+    /** Approved, not expired (at its expiry second it is expired), not used, and for exactly this payment. */
+    private static boolean usable(CardAuthentication a, Card card, Authorization.Request r, Instant now) {
+        return fits(a, card, r) && a.getStatus() == CardAuthentication.Status.APPROVED && a.getUsedAt() == null && now.isBefore(a.getExpiresAt());
     }
 
     /**
@@ -240,6 +294,7 @@ public class AuthorizationEngine {
      * stay within the per-transaction cap together with its active increments and this one. Called under the account's row lock,
      * so two increments at the same moment are counted one after the other.
      */
+    /** (An online payment cannot be added to: an addition has no security code and no approval of the customer.) */
     private Authorization incrementParent(String panHash, Authorization.Request r, ParentRef ref, String processing, Instant now) {
         if (!"00".equals(processing)) {
             return null;
@@ -251,7 +306,8 @@ public class AuthorizationEngine {
         }
         Authorization first = found.get();
         boolean cash = first.getProcessingCode() != null && first.getProcessingCode().startsWith("01");
-        if (first.getParentId() != null || cash || !first.holdsMoney(now) || !first.getTerminalId().equals(r.terminalId())
+        boolean online = first.getEntryMode() != null && first.getEntryMode().startsWith("81");
+        if (first.getParentId() != null || cash || online || !first.holdsMoney(now) || !first.getTerminalId().equals(r.terminalId())
                 || !first.getMerchantId().equals(r.merchantId())) {
             return null;
         }

@@ -177,8 +177,8 @@ class OnlinePaymentTest extends IssuerTestBase {
     @Test
     void theCodeIsCheckedAfterTheCardAndAccountButBeforeTheMoney() throws Exception {
         Fixture poor = fixture("cnp11@example.com", "1.00");
-        assertThat(answer(online(poor, "50.00", wrongCode(poor)))).as("a wrong code on an empty account").isEqualTo("N7");
-        assertThat(answer(online(poor, "50.00", poor.cvv()))).as("a right code on an empty account").isEqualTo("51");
+        assertThat(answer(online(poor, "25.00", wrongCode(poor)))).as("a wrong code on an empty account").isEqualTo("N7");
+        assertThat(answer(online(poor, "25.00", poor.cvv()))).as("a right code on an empty account").isEqualTo("51");
 
         Fixture over = fixture("cnp12@example.com", "100.00");
         assertThat(answer(online(over, "99999.00", wrongCode(over)))).as("a wrong code on an amount over the cap").isEqualTo("N7");

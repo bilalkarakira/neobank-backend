@@ -70,6 +70,14 @@ public class NotificationService {
                         .formatted(last4, WHEN.format(now())));
     }
 
+    /** An online payment waits for the customer's approval; joins the caller's transaction like the freeze notice. */
+    @Transactional
+    public void authenticationRequested(UUID userId, String merchant, String amount, String last4, String reference) {
+        insert(userId, "CARD_AUTH_REQUESTED", "Approve an online payment?",
+                "%s asked to charge %s to your card ending %s on %s (reference %s). Open the Cards page to approve or reject it within a few minutes. If you did not try to pay, reject it."
+                        .formatted(merchant, amount, last4, WHEN.format(now()), reference));
+    }
+
     /** A cleared card payment that was more than the account could cover: the rest is owed to the bank. */
     @Transactional
     public void cardShortfall(UUID userId, String merchant, String paid, String owed) {
