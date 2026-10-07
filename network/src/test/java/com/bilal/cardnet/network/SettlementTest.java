@@ -122,6 +122,24 @@ class SettlementTest {
     }
 
     @Test
+    void aCashWithdrawalIsSettledLikeAPurchase() {
+        clear("B1", THURSDAY, "123456", purchase(PAN, 1, de4("50.00")), purchase(PAN, 2, de4("100.00")).set(3, "010000").set(18, "6011"));
+
+        SettlementService.Run run = settlement.run(THURSDAY).orElseThrow();
+
+        // purchases 150.00, interchange 0.60 + 1.20 = 1.80, scheme fee per side 0.03 + 0.05 = 0.08
+        Line issuerLine = line(run, "ISSUER", "999900");
+        assertThat(issuerLine.purchases()).isEqualByComparingTo("150.00");
+        assertThat(issuerLine.interchange()).isEqualByComparingTo("1.80");
+        assertThat(issuerLine.schemeFee()).isEqualByComparingTo("0.08");
+        assertThat(issuerLine.net()).isEqualByComparingTo("-148.28");
+        assertThat(line(run, "ACQUIRER", "123456").net()).isEqualByComparingTo("148.12");
+        assertThat(line(run, "NETWORK", "NET").net()).isEqualByComparingTo("0.16");
+        assertThat(sum(run)).isEqualByComparingTo("0");
+        assertThat(run.itemCount()).isEqualTo(2);
+    }
+
+    @Test
     void theFeesAreTheStoredRoundedOnesNeverRecomputedFromTotals() {
         // 0.10 and 0.10 and 0.10: each fee rounds to zero on its own, so the day has no fees even though 0.30 x 2% is 0.006
         clear("B1", THURSDAY, "123456", purchase(PAN, 1, de4("0.10")), purchase(PAN, 2, de4("0.10")), purchase(PAN, 3, de4("0.10")));

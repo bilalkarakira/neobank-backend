@@ -47,6 +47,11 @@ public final class AcquirerConfig {
             new Merchant("MERCHANT0000003", "Electronics Store", "5732"),
             new Merchant("MERCHANT0000004", "Casino Royale", "7995"));
 
+    /** The cash machine: its own acceptor id and the merchant category 6011 (ATM). Not in the shop list. */
+    public Merchant atm = new Merchant("ATM000000000001", "City ATM", "6011");
+    /** The most one withdrawal can ask for; the machine pays notes of 10, so amounts are multiples of 10 from 10 to this. */
+    public java.math.BigDecimal atmMax = new java.math.BigDecimal("500");
+
     /**
      * The published demo card of NeoBank's demo data (a test number, not a secret). NeoBank issues a card that expires three years
      * from the month it was issued, so by default the expiry here is three years from now, as MM/YY; CARDNET_DEMO_CARD_EXPIRY

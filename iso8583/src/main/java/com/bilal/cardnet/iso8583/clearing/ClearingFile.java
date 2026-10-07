@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 
 /**
  * The content of one clearing file: who sent it to whom for which business date, and the first presentments (MTI 1240)
- * in it. Presentments are ordinary ISO 8583 messages: DE 2 card, DE 3 processing code (000000 purchase, 200000 refund),
+ * in it. Presentments are ordinary ISO 8583 messages: DE 2 card, DE 3 processing code (000000 purchase, 010000 cash withdrawal, 200000 refund),
  * DE 4 FINAL amount, and DE 11, 13, 32, 37, 41 of the original authorization (that is how the issuer finds it again).
  *
  * <p>A file of the DISPUTE family (name ending {@code .dsp}) carries instead chargebacks (MTI 1442, DE 48 = {@code CB|REASON|note})
@@ -35,6 +35,8 @@ public record ClearingFile(String fileId, LocalDate businessDate, String sender,
         }
     }
     public static final String PURCHASE = "000000";
+    /** A cash withdrawal at a cash machine: cleared and settled like a purchase. */
+    public static final String CASH = "010000";
     public static final String REFUND = "200000";
     public static final int MAX_PRESENTMENTS = 100_000;
 
@@ -128,14 +130,14 @@ public record ClearingFile(String fileId, LocalDate businessDate, String sender,
             }
         }
         String code = m.get(3);
-        if (!PURCHASE.equals(code) && !REFUND.equals(code)) {
-            throw new ClearingFileException(Reason.BAD_PRESENTMENT, "processing code " + code + " is neither purchase nor refund");
+        if (!PURCHASE.equals(code) && !CASH.equals(code) && !REFUND.equals(code)) {
+            throw new ClearingFileException(Reason.BAD_PRESENTMENT, "processing code " + code + " is neither purchase, cash withdrawal nor refund");
         }
         if (Long.parseLong(m.get(4)) <= 0) {
             throw new ClearingFileException(Reason.BAD_PRESENTMENT, "the amount must be positive");
         }
-        if (PURCHASE.equals(code) && !m.has(38)) {
-            throw new ClearingFileException(Reason.MISSING_ELEMENT, "purchase presentment without DE 38 (authorization code)");
+        if (!REFUND.equals(code) && !m.has(38)) {
+            throw new ClearingFileException(Reason.MISSING_ELEMENT, (CASH.equals(code) ? "cash withdrawal" : "purchase") + " presentment without DE 38 (authorization code)");
         }
     }
 

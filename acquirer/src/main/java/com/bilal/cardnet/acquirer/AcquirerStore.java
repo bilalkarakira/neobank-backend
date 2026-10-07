@@ -26,7 +26,7 @@ public final class AcquirerStore {
     /** A payment as the console lists it. */
     public record Row(UUID id, Instant createdAt, String stan, String rrn, String merchantName, String maskedPan, BigDecimal amount,
             String status, String responseCode, String authCode, String reason, boolean timedOut, boolean pinUsed,
-            String kind, BigDecimal finalAmount, UUID batchId, UUID refundOf) {
+            String kind, BigDecimal finalAmount, UUID batchId, UUID refundOf, boolean cash) {
 
         /** What will clear: the final amount when there is one (a tip), else the authorized amount. */
         public BigDecimal clearingAmount() {
@@ -173,7 +173,7 @@ public final class AcquirerStore {
                             rs.getString("rrn"), rs.getString("merchant_name"), rs.getString("masked_pan"), rs.getBigDecimal("amount"),
                             rs.getString("status"), rs.getString("response_code"), rs.getString("auth_code"), rs.getString("reason"),
                             rs.getBoolean("timed_out"), rs.getBoolean("pin_used"), rs.getString("kind"), rs.getBigDecimal("final_amount"),
-                            rs.getObject("batch_id", UUID.class), rs.getObject("refund_of", UUID.class)));
+                            rs.getObject("batch_id", UUID.class), rs.getObject("refund_of", UUID.class), "6011".equals(rs.getString("mcc"))));
                 }
             }
         } catch (SQLException e) {

@@ -74,6 +74,27 @@
     <div id="result" aria-live="polite" style="margin-top:14px"></div>
   </section>
 
+  <section aria-labelledby="atm-h">
+    <h2 id="atm-h">Cash machine</h2>
+    <p class="muted" style="margin:0 0 8px">A cash withdrawal is a payment with its own processing code. The PIN is required, the machine pays notes of 10 (10 to <span id="atm-max">500</span>), and the bank applies its cash limits. It clears with the day like a payment; there is no tip and no refund.</p>
+    <form id="atm-form" autocomplete="off">
+      <label for="atm-pan">Card number</label>
+      <input id="atm-pan" inputmode="numeric" placeholder="16 digits" required>
+      <div class="row">
+        <div><label for="atm-expiry">Valid through (MM/YY)</label><input id="atm-expiry" placeholder="10/29" required></div>
+        <div><label for="atm-pin">PIN</label><input id="atm-pin" inputmode="numeric" placeholder="4 digits" type="password"></div>
+      </div>
+      <div class="row">
+        <div><label for="atm-amount">Cash (USD)</label><input id="atm-amount" inputmode="numeric" placeholder="100" required></div>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit" id="atm-go">Withdraw</button>
+        <button type="button" id="atm-demo" title="Fills in the published demo card of NeoBank's demo data">Use the demo card</button>
+      </div>
+    </form>
+    <div id="atm-result" aria-live="polite" style="margin-top:14px"></div>
+  </section>
+
   <section aria-labelledby="net-h">
     <h2 id="net-h">Network</h2>
     <div id="net"><p class="muted">Loading…</p></div>
@@ -154,7 +175,7 @@
       rows.forEach(function (t) {
         var tr = el('tr'), refund = t.kind === 'REFUND';
         tr.appendChild(el('td', 'mono', new Date(t.createdAt).toLocaleTimeString()));
-        tr.appendChild(el('td', null, t.merchant + (refund ? ' (refund)' : '')));
+        tr.appendChild(el('td', null, t.merchant + (refund ? ' (refund)' : t.cash ? ' (cash)' : '')));
         tr.appendChild(el('td', 'mono', t.card));
         tr.appendChild(el('td', 'num', refund ? '-' + t.amount : t.finalAmount && t.finalAmount !== t.amount ? t.amount + ' \u2192 ' + t.finalAmount : t.amount));
         var s = el('td'); s.appendChild(el('span', 'chip ' + t.status, t.status.replace(/_/g, ' ').toLowerCase())); tr.appendChild(s);
@@ -167,8 +188,9 @@
           var set = el('button', null, 'Set amount'); set.title = 'Change what will clear, for example to add a tip (up to ' + (config && config.tipLimitPercent) + '% more)';
           set.addEventListener('click', function () { change('/api/adjust', t.id, tip.value, set); });
           var b = el('button', null, 'Void'); b.addEventListener('click', function () { voidSale(t.id, b); });
-          w.appendChild(tip); w.appendChild(set); w.appendChild(b); a.appendChild(w);
-        } else if (t.status === 'CLEARED' && !refund) {
+          if (!t.cash) { w.appendChild(tip); w.appendChild(set); }
+          w.appendChild(b); a.appendChild(w);
+        } else if (t.status === 'CLEARED' && !refund && !t.cash) {
           var w2 = el('div', 'inline');
           var amt = el('input'); amt.placeholder = 'refund amount'; amt.inputMode = 'decimal'; amt.setAttribute('aria-label', 'Refund amount');
           var rb = el('button', null, 'Refund'); rb.addEventListener('click', function () { change('/api/refund', t.id, amt.value, rb); });
@@ -286,6 +308,25 @@
       });
   });
 
+  $('atm-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var button = $('atm-go'); button.disabled = true;
+    var box = $('atm-result'); clear(box); box.appendChild(el('div', 'banner REVERSING', 'Waiting for the bank…'));
+    api('POST', '/api/withdraw', { pan: $('atm-pan').value, expiry: $('atm-expiry').value, amount: $('atm-amount').value, pin: $('atm-pin').value })
+      .then(function (r) {
+        clear(box);
+        var ok = r.status === 200 && r.json.status === 'APPROVED';
+        var kind = r.status !== 200 ? 'DECLINED' : r.json.status === 'APPROVED' ? 'APPROVED' : r.json.status === 'REVERSING' ? 'REVERSING' : 'DECLINED';
+        box.appendChild(el('div', 'banner ' + kind, (ok ? 'Cash dispensed. ' : '') + (r.status === 200 ? r.json.message : (r.json.error || 'The withdrawal could not be sent.'))));
+        button.disabled = false; loadTransactions(); loadNetwork();
+      });
+  });
+
+  $('atm-demo').addEventListener('click', function () {
+    if (!config) return;
+    $('atm-pan').value = config.demoCard.pan; $('atm-expiry').value = config.demoCard.expiry; $('atm-pin').value = config.demoCard.pin;
+  });
+
   $('resend').addEventListener('click', function () {
     showBanner('info', 'Sending the latest payment again…');
     api('POST', '/api/resend').then(function (r) {
@@ -325,6 +366,7 @@
 
   api('GET', '/api/config').then(function (r) {
     config = r.json;
+    if (config.atm) { $('atm-max').textContent = config.atm.max; }
     (config.merchants || []).forEach(function (m) {
       var o = el('option', null, m.name + ' (MCC ' + m.mcc + ')'); o.value = m.id; $('shop').appendChild(o);
     });

@@ -166,6 +166,20 @@ class ClearingProcessorTest {
     }
 
     @Test
+    void aCashWithdrawalIsForwardedUnchangedAndPricedLikeAPurchase() throws Exception {
+        Message cash = purchase(PAN, 1, de4("100.00")).set(3, "010000").set(18, "6011");
+        put("B1", cash, purchase(PAN, 2, de4("50.00")));
+
+        processor.tick();
+
+        assertThat(codec.read(list(dirs.issuerIn()).get(0)).presentments()).containsExactly(cash, purchase(PAN, 2, de4("50.00")));
+        assertThat(fees(1)).as("100.00 cash: priced as a purchase").containsExactly("2.00", "1.20", "0.05", "0.05");
+        assertThat(fees(2)).containsExactly("1.00", "0.60", "0.03", "0.03");
+        settle();
+        assertThat(ackOf("B1").items()).extracting(ClearingAck.Item::result).containsExactly("POSTED", "POSTED");
+    }
+
+    @Test
     void feeRoundingBoundaries() {
         assertThat(Fees.of(new BigDecimal("0.25"), false, config).merchantDiscount()).as("0.0050").isEqualByComparingTo("0.01");
         assertThat(Fees.of(new BigDecimal("0.24"), false, config).merchantDiscount()).as("0.0048").isEqualByComparingTo("0.00");

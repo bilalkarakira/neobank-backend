@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
  * GET  /                      the page
  * GET  /api/config            shops, demo card, acquirer and terminal ids
  * POST /api/pay               {pan, expiry, amount, merchantId, pin?}
+ * POST /api/withdraw          {pan, expiry, amount, pin}  a cash withdrawal at the cash machine (the PIN is required)
  * POST /api/resend            send the latest payment again (a duplicate)
  * POST /api/void              {id}
  * POST /api/adjust            {id, amount}  the final amount of an approved payment (a tip)
@@ -94,6 +95,7 @@ public final class PosConsole {
                 case "/api/config" -> only(exchange, method, "GET", () -> json(exchange, 200, config()));
                 case "/api/transactions" -> only(exchange, method, "GET", () -> json(exchange, 200, transactions()));
                 case "/api/pay" -> only(exchange, method, "POST", () -> json(exchange, 200, pay(Json.parseFlat(body(exchange)))));
+                case "/api/withdraw" -> only(exchange, method, "POST", () -> json(exchange, 200, withdraw(Json.parseFlat(body(exchange)))));
                 case "/api/resend" -> only(exchange, method, "POST", () -> json(exchange, 200, resultMap(service.resendLast())));
                 case "/api/void" -> only(exchange, method, "POST", () -> json(exchange, 200, voidSale(Json.parseFlat(body(exchange)))));
                 case "/api/adjust" -> only(exchange, method, "POST", () -> json(exchange, 200, adjust(Json.parseFlat(body(exchange)))));
@@ -169,6 +171,10 @@ public final class PosConsole {
         map.put("demoCard", demo);
         map.put("clearing", clearing.enabled());
         map.put("tipLimitPercent", config.tipLimit.movePointRight(2).stripTrailingZeros().toPlainString());
+        Map<String, Object> atm = Json.object();
+        atm.put("name", config.atm.name());
+        atm.put("max", config.atmMax.toPlainString());
+        map.put("atm", atm);
         map.put("acquirerId", config.acquirerId);
         map.put("terminalId", config.terminalId);
         return map;
@@ -178,6 +184,10 @@ public final class PosConsole {
         AcquirerService.Result result = service.pay(new AcquirerService.PayRequest(text(in, "pan"), text(in, "expiry"), text(in, "amount"),
                 text(in, "merchantId"), text(in, "pin")));
         return resultMap(result);
+    }
+
+    private Map<String, Object> withdraw(Map<String, Object> in) {
+        return resultMap(service.withdraw(new AcquirerService.WithdrawRequest(text(in, "pan"), text(in, "expiry"), text(in, "amount"), text(in, "pin"))));
     }
 
     private Map<String, Object> voidSale(Map<String, Object> in) {
@@ -288,6 +298,7 @@ public final class PosConsole {
         r.put("amount", row.amount().setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
         r.put("finalAmount", row.finalAmount() == null ? null : row.finalAmount().setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
         r.put("kind", row.kind());
+        r.put("cash", row.cash());
         r.put("refundOf", row.refundOf() == null ? null : row.refundOf().toString());
         r.put("status", row.status());
         r.put("responseCode", row.responseCode());

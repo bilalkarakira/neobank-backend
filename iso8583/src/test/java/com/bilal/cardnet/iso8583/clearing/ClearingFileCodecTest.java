@@ -214,7 +214,8 @@ class ClearingFileCodecTest {
             assertThat(reasonOf(header(), line, trailer(1, 100, sha(line)))).as("DE %d", missing).isEqualTo(Reason.MISSING_ELEMENT);
         }
 
-        String code = pack(purchase(1, "000000000100").set(3, "010000"));
+        // cash (010000) is accepted since the cash machine; any other code is still refused
+        String code = pack(purchase(1, "000000000100").set(3, "300000"));
         assertThat(reasonOf(header(), code, trailer(1, 100, sha(code)))).isEqualTo(Reason.BAD_PRESENTMENT);
         String zero = pack(purchase(1, "000000000000"));
         assertThat(reasonOf(header(), zero, trailer(1, 0, sha(zero)))).isEqualTo(Reason.BAD_PRESENTMENT);

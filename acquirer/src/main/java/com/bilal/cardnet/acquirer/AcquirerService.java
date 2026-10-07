@@ -46,6 +46,10 @@ public final class AcquirerService {
     }
 
     /** What the terminal sends. {@code pin} may be null (no PIN entered); {@code expiry} is MM/YY as printed on the card. */
+    /** A cash withdrawal at the machine: the PIN is not optional. */
+    public record WithdrawRequest(String pan, String expiry, String amount, String pin) {
+    }
+
     public record PayRequest(String pan, String expiry, String amount, String merchantId, String pin) {
     }
 
@@ -121,11 +125,47 @@ public final class AcquirerService {
             throw new BadRequestException("A PIN is 4 to 12 digits.");
         }
 
+        return authorize(merchant, pan, expiry, amountText, pin, "000000");
+    }
+
+    /**
+     * A cash withdrawal: an authorization with processing code 010000 at the cash machine (category 6011). The PIN is always sent, the
+     * amount is a whole number of notes of 10 up to the machine's maximum. What the bank allows (limits, funds) is the bank's answer.
+     */
+    public Result withdraw(WithdrawRequest request) {
+        String pan = clean(request.pan());
+        if (!PAN.matcher(pan).matches()) {
+            throw new BadRequestException("The card number must be 13 to 19 digits.");
+        }
+        java.util.regex.Matcher expiry = EXPIRY.matcher(request.expiry() == null ? "" : request.expiry().strip());
+        if (!expiry.matches()) {
+            throw new BadRequestException("The expiry date must look like MM/YY, for example 10/29.");
+        }
+        String pin = request.pin() == null ? "" : request.pin().strip();
+        if (!PIN.matcher(pin).matches()) {
+            throw new BadRequestException("A cash withdrawal needs the PIN (4 to 12 digits).");
+        }
+        String amountText = request.amount() == null ? "" : request.amount().strip();
+        if (!AMOUNT.matcher(amountText).matches()) {
+            throw new BadRequestException("The amount must be a whole number of dollars.");
+        }
+        BigDecimal amount = new BigDecimal(amountText);
+        if (amount.signum() <= 0 || amount.remainder(BigDecimal.TEN).signum() != 0) {
+            throw new BadRequestException("The machine pays notes of 10: choose 10, 20, 30 ...");
+        }
+        if (amount.compareTo(config.atmMax) > 0) {
+            throw new BadRequestException("The machine pays at most " + config.atmMax.toPlainString() + " at a time.");
+        }
+        return authorize(config.atm, pan, expiry, amount.setScale(2).toPlainString(), pin, "010000");
+    }
+
+    private Result authorize(AcquirerConfig.Merchant merchant, String pan, java.util.regex.Matcher expiry, String amountText, String pin,
+            String processingCode) {
         Instant now = clock.instant();
         UUID id = UUID.randomUUID();
         String stan = Sequences.nextStan(ds);
         String rrn = Sequences.nextRrn(ds);
-        Message payment = Message.of("0100").set(2, pan).set(3, "000000").set(4, Messages.de4(new BigDecimal(amountText)))
+        Message payment = Message.of("0100").set(2, pan).set(3, processingCode).set(4, Messages.de4(new BigDecimal(amountText)))
                 .set(7, Messages.de7(now)).set(11, stan).set(12, TIME.format(now)).set(13, DATE.format(now))
                 .set(14, expiry.group(2) + expiry.group(1)).set(18, merchant.mcc()).set(22, "051").set(25, "00")
                 .set(32, config.acquirerId).set(37, rrn).set(41, "%-8s".formatted(config.terminalId)).set(42, "%-15s".formatted(merchant.id()))
