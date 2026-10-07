@@ -15,9 +15,11 @@ This is a learning project. It is built to be **correct about the ideas** and **
 - A cleared payment that no authorization matches is posted anyway and flagged; real schemes have more nuanced exception handling.
 - A statement NeoBank disputes stays disputed (no resolution workflow); a clearing file item that fails is retried forever.
 - Clearing files from before business dates existed never reach a settlement.
+- **Disputes are one round.** A customer disputes a posted payment once (all of it or a part, within 120 days, five plain reasons); the shop's bank may answer once; that answer ends the dispute (no pre-arbitration, no arbitration, no second chargeback, no reason-specific evidence rules, no dispute fees). Silence for the window means the customer wins. A representment that arrives after the dispute was won is still honoured (the network settled it) and shows up as a finding.
+- **NeoBank keeps no card number**, so a chargeback record carries the BIN, zeros and the last four digits where a real one carries the card number; the network matches by those digits plus STAN and RRN. The acquirer's representment carries the real number.
 
 ## Not built
-Chargebacks and representments, ATM withdrawals, incremental or partial authorizations, card-not-present payments, currency conversion, disputes UI, CI, published images, a cloud deployment, screenshots.
+ATM withdrawals, incremental or partial authorizations, card-not-present payments, currency conversion, CI, published images, a cloud deployment, screenshots.
 
 ## What *is* done properly
 Real-time authorization with holds and available balance; idempotency and duplicate handling; reversals with durable retries; stand-in with advices; file-based clearing and settlement with file-level acknowledgement; a double-entry ledger whose invariant is checked; race-safe posting (row locks, unique keys as the final backstop); and tests, including checks that break the code on purpose to confirm a test notices.

@@ -42,6 +42,18 @@ issuer, the acquirer and the network (they add up to zero).
 (authorized, cleared, settled) and the differences list: the tip shows up as "Amount changed". *Lesson: reconciliation is
 three records that must agree, and every difference has a plain explanation.*
 
+## 6. A dispute (2 minutes)
+
+*Bank, Cards:* under **Posted**, press **Dispute this payment**, choose a reason and send. The amount is **credited at once**
+(provisional credit) and the dispute reads "Sent to the card network", then "Under review: the shop can still answer".
+*Shop:* the **Chargebacks** section shows the chargeback with its reason. Type some evidence and press **Represent**: the
+shop's bank answers once.
+*Bank:* the dispute reads **Lost** and the money is taken from the account again. Dispute another payment and do nothing at the
+shop: after the answer window (30 seconds in this stack, two weeks by default) it reads **Won: the credit is final**.
+*Admin, Disputes:* every dispute and its state, a button that closes the due ones now; *Settlement:* the chargeback and the
+representment are in the next statement (a refund and a purchase), and NeoBank matched it by its own computation.
+*Lesson: a chargeback is a refund-like item through the whole chain; the shop gets one answer; silence means the customer wins.*
+
 ## Look at the files (optional)
 
 ```bash

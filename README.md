@@ -141,7 +141,33 @@ its scheme fee*, the network keeps both scheme fees: the three add up to zero. T
 statement per participant, with a value date (next business day). NeoBank **recomputes the figures itself** from the items it
 posted before posting anything: a statement that does not agree is *disputed*, not trusted.
 
-### 4. Reconciliation
+### 4. Disputes: chargebacks and representments
+
+A customer disputes a posted payment. The bank **credits the amount at once** (provisional credit) and sends a **chargeback**
+(MTI 1442) through the network in an encrypted `.dsp` file. The network checks it against its own cleared items (same card,
+STAN and RRN, the issuer's own payment, at most the original amount, at most 120 days old, one chargeback per payment), forwards
+it to the shop's bank, and settles it **like a refund**. The shop may answer **once** with a **representment** (a second
+presentment with its evidence), settled **like a purchase**: the customer is debited again and loses. If nobody answers within
+the window (30 seconds in this stack, two weeks by default) the customer wins and the credit is final. All of it is simulated:
+no arbitration, no real scheme rules.
+
+```mermaid
+sequenceDiagram
+    participant C as Customer
+    participant I as NeoBank (issuer)
+    participant N as Card network
+    participant A as Shop's bank (acquirer)
+    C->>I: dispute a posted payment
+    I->>C: provisional credit (at once)
+    I->>N: chargeback file (.dsp, 1442)
+    N->>N: checks it against its own cleared items
+    N->>A: chargeback (and acknowledges the issuer)
+    A->>N: representment (the shop's evidence), once
+    N->>I: representment: the customer is debited again, the dispute is LOST
+    Note over I,A: no answer within the window: the dispute is WON, the credit is final
+```
+
+### 5. Reconciliation
 
 An admin page compares, from NeoBank's records, what was **authorized**, **cleared** and **settled**, and lists every difference in
 plain words: amount changed (a tip), cleared without approval, rejected, approved but never cleared, a disputed statement, a ledger

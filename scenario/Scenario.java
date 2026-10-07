@@ -1,3 +1,4 @@
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -18,7 +19,8 @@ import java.util.regex.Pattern;
  *
  * It pays at a shop, gets declined, mistypes a PIN, sends a payment twice, adds a tip, takes NeoBank "down" and still gets an
  * approval from the card network, voids a payment, closes the day (clearing), refunds, settles the day between the banks, and
- * then looks at what NeoBank itself says about all of it. Every step states what it expects; the exit code is 1 if any
+ * then looks at what NeoBank itself says about all of it. It also disputes two payments: the shop answers the first
+ * (the customer loses), nobody answers the second (the customer wins once the 30 second window of the compose stack has passed). Every step states what it expects; the exit code is 1 if any
  * expectation fails, so it is also an end-to-end test of the packaging. Use it once per ten minutes (NeoBank allows a card ten
  * approvals in ten minutes). Test cards and test numbers only: this is a simulation, not a bank.
  */
@@ -150,7 +152,48 @@ public class Scenario {
             expect("NeoBank checked the figures itself and MATCHED " + run, matched(run));
         }
 
-        step("12. What NeoBank says about all of it (admin views)");
+        step("12. DISPUTE 1: the customer says the 46.00 dinner never arrived; the shop's bank answers with evidence");
+        BigDecimal ledgerBefore = ledger();
+        String dinnerAuthorization = find(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken),
+                "(?s)\\{\"id\":\"([^\"]+)\"(?:(?!\\{\"id\").)*?\"capturedAmount\":\"46\\.00\"");
+        String filed = post(BANK + "/api/cards/payments/" + dinnerAuthorization + "/dispute", "{\"reason\":\"NOT_RECEIVED\",\"note\":\"The dinner never arrived\"}", demoToken);
+        expect("the dispute is filed", "FILED".equals(field(filed, "status")));
+        expect("the customer got the 46.00 back at once (provisional credit)", ledger().subtract(ledgerBefore).compareTo(new BigDecimal("46.00")) == 0);
+        waitUntil("the network accepted the chargeback", () -> "OPEN".equals(disputeStatus(dinnerAuthorization)), 90);
+        expect("the card network accepted the chargeback and the dispute is open", "OPEN".equals(disputeStatus(dinnerAuthorization)));
+        waitUntil("the shop received the chargeback", () -> contains(get(POS + "/api/disputes", null), "\"status\":\"RECEIVED\""), 60);
+        String chargeback = get(POS + "/api/disputes", null);
+        expect("the shop sees the chargeback (reason: not received)", contains(chargeback, "\"status\":\"RECEIVED\"") && contains(chargeback, "NOT_RECEIVED"));
+        String chargebackId = find(chargeback, "\"id\":\"([^\"]+)\"");
+        post(POS + "/api/represent", "{\"id\":\"" + chargebackId + "\",\"note\":\"Signed receipt and delivery note on file\"}");
+        waitUntil("the dispute was lost", () -> "LOST".equals(disputeStatus(dinnerAuthorization)), 90);
+        expect("the shop proved its case: the customer LOST the dispute", "LOST".equals(disputeStatus(dinnerAuthorization)));
+        expect("the 46.00 was taken from the customer again", ledger().compareTo(ledgerBefore) == 0);
+
+        step("13. DISPUTE 2: another payment is disputed and nobody answers: after the window the customer WINS");
+        String coffeeDispute = post(BANK + "/api/cards/payments/" + coffeeAuthorizationId() + "/dispute", "{\"reason\":\"UNAUTHORIZED\",\"note\":\"I did not make this payment\"}", demoToken);
+        expect("the second dispute is filed", "FILED".equals(field(coffeeDispute, "status")));
+        String coffeeAuth = field(coffeeDispute, "authorizationId");
+        waitUntil("the second dispute was won", () -> "WON".equals(disputeStatus(coffeeAuth)), 120);
+        expect("nobody answered in time: the customer WON and the credit is final", "WON".equals(disputeStatus(coffeeAuth)));
+
+        step("14. The chargebacks and the representment are settled between the banks like refunds and purchases");
+        List<String> disputeRuns = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            String run = post(NET + "/settlement/run", "");
+            if (!"true".equals(field(run, "settled"))) {
+                break;
+            }
+            disputeRuns.add(field(run, "runNumber"));
+            System.out.println("   " + field(run, "message"));
+        }
+        expect("the network settled the dispute items", !disputeRuns.isEmpty());
+        for (String run : disputeRuns) {
+            waitUntil("NeoBank decided statement " + run, () -> contains(get(BANK + "/api/admin/settlement", adminToken), "\"runNumber\":\"" + run + "\""), 60);
+            expect("NeoBank checked the figures itself and MATCHED " + run, matched(run));
+        }
+
+        step("15. What NeoBank says about all of it (admin views)");
         String clearing = get(BANK + "/api/admin/clearing", adminToken);
         System.out.println("   clearing books check: " + find(clearing, "\"booksMatch\":(true|false)") + ", owed to the card network " + find(clearing, "\"settlementPayable\":\"([^\"]+)\""));
         expect("the clearing books agree with the posted items", contains(clearing, "\"booksMatch\":true"));
@@ -159,7 +202,7 @@ public class Scenario {
         String settlement = get(BANK + "/api/admin/settlement", adminToken);
         expect("the ledger agrees with the cleared and settled items", contains(settlement, "\"ledgerAgrees\":true"));
 
-        System.out.println("\nLook at it yourself: the bank http://127.0.0.1:4200 (demo@neobank.local / DemoPassw0rd: Cards, History; admin@neobank.local / AdminPassw0rd: Clearing, Settlement),");
+        System.out.println("\nLook at it yourself: the bank http://127.0.0.1:4200 (demo@neobank.local / DemoPassw0rd: Cards, History; admin@neobank.local / AdminPassw0rd: Clearing, Settlement, Disputes),");
         System.out.println("the shop http://127.0.0.1:9000, and the files in the clearing volume (docs/DEMO-SCRIPT.md says where to look).");
         if (failures.isEmpty()) {
             System.out.println("\nAll expectations met.");
@@ -181,6 +224,24 @@ public class Scenario {
         if (!ok) {
             failures.add(what);
         }
+    }
+
+    // ---- disputes ----
+
+    static BigDecimal ledger() throws Exception {
+        return new BigDecimal(find(get(BANK + "/api/cards", bankToken), "\"ledgerBalance\":\"([^\"]+)\""));
+    }
+
+    /** The state of the customer's dispute of one payment. */
+    static String disputeStatus(String authorizationId) throws Exception {
+        Matcher m = Pattern.compile("\"authorizationId\":\"" + Pattern.quote(authorizationId) + "\"[^{}]*?\"status\":\"([A-Z]+)\"").matcher(get(BANK + "/api/cards/disputes", bankToken));
+        return m.find() ? m.group(1) : null;
+    }
+
+    /** The authorization of the 25.00 coffee of step 1 (the posted payment that was partly refunded). */
+    static String coffeeAuthorizationId() throws Exception {
+        return find(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", bankToken),
+                "(?s)\\{\"id\":\"([^\"]+)\"(?:(?!\\{\"id\").)*?\"capturedAmount\":\"25\\.00\"");
     }
 
     // ---- the stack ----
@@ -278,6 +339,14 @@ public class Scenario {
             request.header("Authorization", "Bearer " + token);
         }
         return HTTP.send(request.GET().build(), HttpResponse.BodyHandlers.ofString()).body();
+    }
+
+    static String post(String url, String body, String token) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).header("Content-Type", "application/json");
+        if (token != null) {
+            request.header("Authorization", "Bearer " + token);
+        }
+        return HTTP.send(request.POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString()).body();
     }
 
     static String post(String url, String body) throws Exception {
