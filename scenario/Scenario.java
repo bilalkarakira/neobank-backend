@@ -106,7 +106,7 @@ public class Scenario {
         post(POS + "/api/network/chaos", "{\"issuerDown\":false}");
         waitUntil("the link is up again", () -> contains(get(NET + "/status", null), "\"issuerLink\":\"UP\""), 60);
         waitUntil("the advice was delivered", () -> contains(get(NET + "/status", null), "\"advicesWaiting\":0"), 60);
-        expect("NeoBank holds the stand-in payment and marks it", contains(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken), "\"standIn\":true"));
+        expect("NeoBank holds the stand-in payment and marks it", contains(get(BANK + "/api/cards/" + cardId + "/authorizations?size=50", demoToken), "\"standIn\":true"));
 
         step("8. A payment is cancelled (void)");
         String cancelled = pay("7.00", CAFE, pin);
@@ -122,7 +122,7 @@ public class Scenario {
         expect("the bank refuses 400.00: its limit is 300.00 per withdrawal (code 61)", "DECLINED".equals(field(tooMuch, "status")) && "61".equals(field(tooMuch, "responseCode")));
         String cash = post(POS + "/api/withdraw", atmBody.formatted("100", ",\"pin\":\"" + pin + "\""));
         expect("the bank approved 100.00 in cash", "APPROVED".equals(field(cash, "status")));
-        expect("NeoBank marks it as a cash withdrawal", contains(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken), "\"cash\":true"));
+        expect("NeoBank marks it as a cash withdrawal", contains(get(BANK + "/api/cards/" + cardId + "/authorizations?size=50", demoToken), "\"cash\":true"));
 
         step("9b. An online shop: no card in a terminal and no PIN, the security code on the card instead");
         String wrongCode = "000".equals(cvv) ? "111" : "000";
@@ -130,16 +130,16 @@ public class Scenario {
         expect("a wrong security code is declined with code N7", "DECLINED".equals(field(wrongOnline, "status")) && "N7".equals(field(wrongOnline, "responseCode")));
         String rightOnline = post(POS + "/api/pay-online", onlineBody("20.00", cvv));
         expect("the right security code is approved", "APPROVED".equals(field(rightOnline, "status")));
-        String onlineActivity = get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken);
+        String onlineActivity = get(BANK + "/api/cards/" + cardId + "/authorizations?size=50", demoToken);
         expect("NeoBank marks the payment as an online payment", contains(onlineActivity, "\"online\":true"));
         expect("the security code is nowhere in what the shop or the bank shows",
                 !wrongOnline.contains("\"" + cvv + "\"") && !rightOnline.contains(": " + cvv) && !contains(onlineActivity, "cvv"));
         System.out.println("   (the wrong code counted like a wrong PIN: the next payment with the PIN resets the counter)\n");
 
         step("9c. An online payment above 30.00 needs the customer's approval (a simulation of 3-D Secure: the bank asks, the customer answers in the app)");
-        String big = post(POS + "/api/pay-online", onlineBody("80.00", cvv));
-        String reference = field(big, "challenge");
-        expect("the bank declines with 1A and a reference for the customer to approve", "DECLINED".equals(field(big, "status")) && "1A".equals(field(big, "responseCode")) && reference != null);
+        String needsApproval = post(POS + "/api/pay-online", onlineBody("80.00", cvv));
+        String reference = field(needsApproval, "challenge");
+        expect("the bank declines with 1A and a reference for the customer to approve", "DECLINED".equals(field(needsApproval, "status")) && "1A".equals(field(needsApproval, "responseCode")) && reference != null);
         String waiting = get(BANK + "/api/cards/authentications", demoToken);
         expect("the customer sees the request in the app (shop, amount and the same reference)",
                 contains(waiting, "\"reference\":\"" + reference + "\"") && contains(waiting, "\"amount\":\"80.00\"") && contains(waiting, "Corner Cafe"));
@@ -186,7 +186,7 @@ public class Scenario {
         String afterClearing = get(BANK + "/api/cards/" + cardId + "/authorizations?size=50", demoToken);
         expect("the pump cleared for 61.40, the total it really used", contains(afterClearing, "\"capturedAmount\":\"61.40\""));
         expect("the 25.00 addition no longer holds money: it was merged into the pump payment", contains(afterClearing, "\"status\":\"MERGED\""));
-        expect("the tip was taken: the dinner posted 46.00", contains(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken), "\"capturedAmount\":\"46.00\""));
+        expect("the tip was taken: the dinner posted 46.00", contains(get(BANK + "/api/cards/" + cardId + "/authorizations?size=50", demoToken), "\"capturedAmount\":\"46.00\""));
         waitUntil("the shop sees its payments cleared", () -> "CLEARED".equals(posStatus(coffeeId)) && "CLEARED".equals(posStatus(standInId)), 30);
 
         step("12. A refund of 10.00 for the 25.00 purchase");
@@ -219,7 +219,7 @@ public class Scenario {
 
         step("14. DISPUTE 1: the customer says the 46.00 dinner never arrived; the shop's bank answers with evidence");
         BigDecimal ledgerBefore = ledger();
-        String dinnerAuthorization = find(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", demoToken),
+        String dinnerAuthorization = find(get(BANK + "/api/cards/" + cardId + "/authorizations?size=50", demoToken),
                 "(?s)\\{\"id\":\"([^\"]+)\"(?:(?!\\{\"id\").)*?\"capturedAmount\":\"46\\.00\"");
         String filed = post(BANK + "/api/cards/payments/" + dinnerAuthorization + "/dispute", "{\"reason\":\"NOT_RECEIVED\",\"note\":\"The dinner never arrived\"}", demoToken);
         expect("the dispute is filed", "FILED".equals(field(filed, "status")));
@@ -305,7 +305,7 @@ public class Scenario {
 
     /** The authorization of the 25.00 coffee of step 1 (the posted payment that was partly refunded). */
     static String coffeeAuthorizationId() throws Exception {
-        return find(get(BANK + "/api/cards/" + cardId + "/authorizations?size=20", bankToken),
+        return find(get(BANK + "/api/cards/" + cardId + "/authorizations?size=50", bankToken),
                 "(?s)\\{\"id\":\"([^\"]+)\"(?:(?!\\{\"id\").)*?\"capturedAmount\":\"25\\.00\"");
     }
 
