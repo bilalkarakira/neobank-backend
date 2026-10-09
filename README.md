@@ -1,6 +1,16 @@
 # NeoBank Backend
 
-Spring Boot 4 / Java 21 / PostgreSQL / Flyway. Frontend lives in `../neobank-frontend`.
+Spring Boot 4 / Java 21 / PostgreSQL / Flyway. Frontend lives in `../neobank-frontend`. The best place to start is the overview in the
+`neobank-demo` repository (README and docs): it explains the whole card payment this service takes part in.
+
+## What it does
+- A simulated retail bank: customers, checking and savings accounts, transfers, history, dashboard, recurring payments, interest, admin.
+- **The card issuer** (test BIN 999900): card issuing with a PIN and a security code shown once, an ISO 8583 listener that decides
+  authorizations in real time and holds the money, reversals and duplicates, cash withdrawals, additions to a payment (a fuel pump),
+  online payments with a security code and the customer's approval above 30.00.
+- **Clearing, settlement and reconciliation**: reads the network's encrypted files, posts the debits, checks the settlement figures itself.
+- **Disputes**: chargebacks with a provisional credit, and the shop's answer.
+- Every money movement goes through one ledger service that writes two postings summing to zero.
 
 ## Run
 ```bash
@@ -14,15 +24,21 @@ Health check: http://localhost:8080/actuator/health
 cd ../neobank-cardnet && ./mvnw install     # puts com.bilal.cardnet:iso8583 in your local Maven repository
 ```
 The API then also listens for ISO 8583 card messages on 127.0.0.1:8583 (`app.cards.listener.*`; localhost only, no TLS).
-The key that hashes card numbers and PINs is `CARD_PAN_KEY` (>= 32 characters; a development default is built in).
+The key that hashes card numbers, PINs and security codes is `CARD_PAN_KEY` (>= 32 characters; a development default is built in).
 This is a card-*issuing* simulation: no licence, no real card scheme, test BIN 999900.
 
-Requires JDK 21+ (set `JAVA_HOME`). See [../docs/plan.md](../docs/plan.md) for the plan.
+## Tests
+```bash
+./mvnw test       # JDK 21+, Docker running (Testcontainers starts a real PostgreSQL)
+```
+
+Requires JDK 21+ (set `JAVA_HOME`).
 
 ## Demo card
 The `demo` profile also gives the demo customer one test card on the checking account (also added to a demo database that was
-seeded before cards existed): number `9999 0000 0000 0012`, PIN `4321`, expiry shown on the Cards page (the issuer wants it as YYMM).
-It is a published test number, not a secret. Send it a payment with the smoke client in `../neobank-cardnet/tools`.
+seeded before cards existed): number `9999 0000 0000 0012`, PIN `4321`, security code `123` (for online payments), expiry shown on the
+Cards page (the issuer wants it as YYMM). They are published test values, not secrets. Send it a payment with the smoke client in
+`../neobank-cardnet/tools`, or use the virtual POS of `neobank-cardnet`.
 
 ## Demo data (for the dashboard)
 Start the API with the `demo` profile to get a demo customer with about six months of believable activity:
