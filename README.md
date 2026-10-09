@@ -3,7 +3,7 @@
 A simulated card network around NeoBank, built to show how a card payment really moves: ISO 8583 messages in real time,
 then clearing and settlement files later. NeoBank (the sibling `neobank-backend` project) is the issuer.
 
-Status: phases P1 (the ISO 8583 codec) and P3 (network switch, acquirer, virtual POS) are built. See `../docs/PLAN-card-network.md` for the whole plan and `../docs/SPEC-P3-network.md` for how the three processes behave.
+Built: the ISO 8583 codec, the network switch (routing, stand-in, advices), the acquirer with a virtual POS, clearing, settlement and reconciliation files, chargebacks, a cash machine, additions to a payment, and online payments with a security code and the customer's approval. The best place to start is the overview in the `neobank-demo` repository (its README, architecture notes and limits).
 
 ## Modules
 
@@ -34,7 +34,7 @@ Everything listens on 127.0.0.1 only, without TLS or authentication: this is a s
 Things to try in the POS console: pay with the demo card; a wrong PIN; the casino (blocked category); "Send last again" (a duplicate);
 "Void" an approved payment; switch NeoBank off in the network panel and pay a small amount (the network approves by itself, then tells NeoBank
 when it is back); hold NeoBank's answers back for 4000 ms (a slow bank: the network answers on its own, then undoes the late approval);
-hold the network's answers back for 7000 ms (the acquirer gives up, cancels, and retries its reversal until it is confirmed).
+hold the network's answers back for 7000 ms (the acquirer gives up, cancels, and retries its reversal until it is confirmed); the Online shop section (a payment with the security code, and above 30.00 the customer's approval first); the Cash machine; "Add to payment" on a shop payment (a pump); a refund; "Close the day"; the Chargebacks table.
 
 ## Build and test
 
@@ -44,7 +44,7 @@ hold the network's answers back for 7000 ms (the acquirer gives up, cancels, and
 
 ## Poke the issuer by hand
 `tools/SmokeClient.java` signs on and sends one authorization (and optionally a duplicate and a reversal) to the issuer, then prints
-both messages decoded. It is a stopgap until the virtual POS of a later phase exists.
+both messages decoded. The virtual POS page does the same through a web page; this is the small command-line version.
 
 ```bash
 java -cp iso8583/target/iso8583-0.1.0-SNAPSHOT.jar tools/SmokeClient.java \
@@ -79,11 +79,11 @@ Set `CARDNET_DATA_DIR` (the same folder for the network and the acquirer; defaul
 java -cp "shared/target/shared-0.1.0-SNAPSHOT.jar;iso8583/target/iso8583-0.1.0-SNAPSHOT.jar" tools/ClearingStub.java DATA_DIR
 ```
 
-It answers every file as posted and posts nothing. Fees (merchant discount 2.00%, interchange 1.20%, scheme fee 0.05% each side) are only worked out and stored in P4; they are posted in P5.
+It answers every file as posted and posts nothing. Fees (merchant discount 2.00%, interchange 1.20%, scheme fee 0.05% each side) are worked out and stored when the day is cleared; they are posted at settlement.
 
 ## Settlement and the end-of-day tool
 
-After clearing, the network turns the cleared items of a business day into **one net movement per participant** (SPEC-P5-settlement.md): for each cleared purchase the issuer pays amount - interchange + its scheme fee, the acquirer receives amount - interchange - its scheme fee, the network receives both scheme fees; the three add up to zero, and a refund reverses every sign. The run has a value date (the next business day; weekends and `CARDNET_HOLIDAYS=2026-12-25,...` skipped) and writes, per participant, a CSV and a camt.053-STYLE XML statement into `settlement-out/` of the clearing folder (totals only, readable on purpose, not encrypted, not schema-validated: a simulation).
+After clearing, the network turns the cleared items of a business day into **one net movement per participant** (see the settlement section of the `neobank-demo` README): for each cleared purchase the issuer pays amount - interchange + its scheme fee, the acquirer receives amount - interchange - its scheme fee, the network receives both scheme fees; the three add up to zero, and a refund reverses every sign. The run has a value date (the next business day; weekends and `CARDNET_HOLIDAYS=2026-12-25,...` skipped) and writes, per participant, a CSV and a camt.053-STYLE XML statement into `settlement-out/` of the clearing folder (totals only, readable on purpose, not encrypted, not schema-validated: a simulation).
 
 ```
 POST http://127.0.0.1:9100/settlement/run[?date=2026-10-06]    one run (the oldest unsettled day when no date)
