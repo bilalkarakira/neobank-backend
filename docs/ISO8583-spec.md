@@ -55,7 +55,7 @@ when unpacking, a value that breaks its type, a bad prefix, truncated or surplus
 | 41 | Card acceptor terminal id | `ans 8` | |
 | 42 | Card acceptor id (merchant) | `ans 15` | |
 | 43 | Card acceptor name/location | `ans 40` | |
-| 48 | Additional data, private | `ans ...999` LLLVAR | |
+| 48 | Additional data, private | `ans ...999` LLLVAR | used as `3DS|<reference>`: in a `1A` answer it names the customer's pending approval, in the shop's next request it is the proof of that approval (see the online payments in the demo README) |
 | 49 | Currency code, transaction | `n 3` | ISO 4217 numeric, `840` USD |
 | 52 | PIN data | `b 16 hex` (8 bytes) | masked in the inspector |
 | 53 | Card verification value 2 (CVV2) | `n ..4` (LL) | masked in the inspector; **never stored** by any program here. A simplification: real systems carry the security code in other private elements |
@@ -85,9 +85,12 @@ supplies `1250` as the generic acknowledgement MTI.
 
 ## Response codes (DE 39)
 
-`00` approved, `05` do not honour, `14` invalid card number, `30` format error, `51` insufficient funds, `54` expired card,
-`55` incorrect PIN, `57` transaction not permitted, `61` exceeds withdrawal limit, `91` issuer unavailable, `94` duplicate
-transmission, `96` system malfunction.
+`00` approved, `05` do not honour (also: the customer rejected the online payment), `12` invalid transaction (an addition that cannot be made),
+`13` invalid amount, `14` invalid card number, `1A` additional customer authentication required (the answer carries DE 48 `3DS|<reference>`),
+`30` format error, `51` insufficient funds, `54` expired card, `55` incorrect PIN, `57` transaction not permitted, `61` exceeds
+withdrawal limit, `65` too many payments in a short time, `75` too many wrong PINs or security codes (the card was frozen), `91` issuer
+unavailable, `94` duplicate transmission, `96` system malfunction, `N7` wrong or missing security code (`1A` and `N7` are a simplification
+of how real schemes signal these cases: this library's own usage).
 
 ## Framing
 
