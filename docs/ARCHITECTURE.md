@@ -51,7 +51,10 @@ flowchart TB
 5. **Do not guess about answers that did not come.** A timeout becomes a reversal that is stored durably and retried (1, 2, 4, 8, 16 s, then every minute, for 24 hours); a late approval after the network answered on its own is reversed.
 6. **Trust but verify across party lines.** The network checks every file and item; NeoBank recomputes the settlement figures from its own items and disputes a statement that differs.
 7. **Crash safety by construction.** Each multi-step operation commits its state first and does the external side effect (writing a file) after, from stored data, so a restart repairs it: batches, issuer files, acknowledgements and settlement files all have this shape.
-8. **Secrets stay out.** Card numbers are never stored in the clear: a keyed hash plus the last four digits at the bank, AES-GCM ciphertext where a message must be rebuilt; PIN data is never stored, not even encrypted; logs, hex dumps and every admin page mask the number. Tests scan tables, files and logs for card numbers.
+8. **Secrets stay out.** (The security code of an online payment is one more: only a keyed hash is kept at the bank, and every copy of a message that is stored, queued or advised leaves DE 53 out.) Card numbers are never stored in the clear: a keyed hash plus the last four digits at the bank, AES-GCM ciphertext where a message must be rebuilt; PIN data is never stored, not even encrypted; logs, hex dumps and every admin page mask the number. Tests scan tables, files and logs for card numbers.
+
+9. **A proof is used once, in the same transaction as the payment it pays for.** The customer's approval of an online payment above 30.00 is a row (`card_authentications`); the shop's retry names it in DE 48. The check in the engine and the atomic UPDATE that marks it used are two guards of the same rule, so one approval pays once even for two simultaneous requests, and a payment that fails for lack of money does not burn it.
+10. **Think through every path that reaches a rule.** An addition to an online payment would have skipped the security code and the approval, so it is refused at the acquirer and at the bank.
 
 ## Configuration (environment)
 

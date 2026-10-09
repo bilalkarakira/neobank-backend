@@ -262,7 +262,7 @@ Each repository has a workflow in `.github/workflows/ci.yml` that runs on every 
 
 The workflows assume the four repositories live under the same GitHub owner with these names and can be read by the workflow
 (public, or give `actions/checkout` a token). The workflows have been run only as their individual commands, on a clean export of
-the committed code on Windows with JDK 27 (the code is compiled for Java 21); they have not run on GitHub yet.
+the committed code on Windows with JDK 27 (the code is compiled for Java 21); they have not run on GitHub yet. The whole stack was also built from the Dockerfiles with `docker compose up --build` (from a clean export of the committed code) and the full scenario passed on it: 57 checks, 0 failures.
 
 ## More
 
