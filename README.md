@@ -13,7 +13,7 @@ debit, and the settlement between the banks.
 
 This repository is the **backend** and everything behind the web app: the issuer (Spring Boot), the card network and the
 acquirer (`cardnet/`), and the demo stack (`demo/`). The web app is in the companion repository
-[neobank-frontend](https://github.com/OWNER/neobank-frontend).
+[neobank-frontend](https://github.com/bilalkarakira/neobank-frontend).
 
 ## What it can do
 
@@ -67,8 +67,8 @@ docker-compose.yml   a development PostgreSQL (port 5433) and pgAdmin
 You need **Docker**. Clone this repository and the frontend **side by side** (the demo stack builds the web app from it):
 
 ```bash
-git clone https://github.com/OWNER/neobank-backend.git
-git clone https://github.com/OWNER/neobank-frontend.git
+git clone https://github.com/bilalkarakira/neobank-backend.git
+git clone https://github.com/bilalkarakira/neobank-frontend.git
 
 cd neobank-backend/demo
 docker compose up --build        # the first build downloads and compiles everything: a few minutes
