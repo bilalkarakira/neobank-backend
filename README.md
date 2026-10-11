@@ -114,14 +114,23 @@ docker exec neobank-postgres psql -U neobank -d postgres -c "create database car
 (cd cardnet && ./mvnw install -DskipTests)
 ```
 
-**3. One shared folder** for the clearing and settlement files. NeoBank, the network and the acquirer must all use the **same**
-folder, so set the same variable in each terminal before starting it (bash; in PowerShell use `$env:CARDNET_DATA_DIR = "$PWD\data\clearing"`):
+**3. Two settings.** NeoBank, the network and the acquirer exchange the clearing and settlement files through one folder and must all use the **same**
+folder, so set `CARDNET_DATA_DIR` in each terminal before starting its process. NeoBank also needs a short dispute window if you want the scenario
+runner to show a dispute being won (a shop has two weeks to answer a chargeback by default; the Docker stack uses 30 seconds). Bash:
 
 ```bash
 export CARDNET_DATA_DIR="$PWD/data/clearing"
+export APP_CARDS_DISPUTES_WINDOW=30s       # only NeoBank reads this one
 ```
 
-**4. Start the three Java processes**, each in its own terminal, from this repository's root, with that variable set:
+PowerShell:
+
+```powershell
+$env:CARDNET_DATA_DIR = "$PWD\data\clearing"
+$env:APP_CARDS_DISPUTES_WINDOW = "30s"
+```
+
+**4. Start the three Java processes**, each in its own terminal, from this repository's root, with those variables set:
 
 ```bash
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo        # NeoBank: API :8080, ISO 8583 listener 127.0.0.1:8583, demo customer and demo card
