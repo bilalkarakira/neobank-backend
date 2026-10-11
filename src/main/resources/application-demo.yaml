@@ -3,3 +3,7 @@ app:
   admin:
     email: admin@neobank.local
     password: AdminPassw0rd
+  security:
+    cors:
+      # the web app is opened as http://localhost:4200 (npm start) or as http://127.0.0.1:4200 (the Docker stack's address in the docs)
+      allowed-origins: http://localhost:4200,http://127.0.0.1:4200
