@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:neobank:simulation:camt.053.001.08-subset">
+ <BkToCstmrStmt>
+  <GrpHdr><MsgId>SETL-S0000001-123456</MsgId><CreDtTm>2026-10-06T21:00:00Z</CreDtTm></GrpHdr>
+  <Stmt>
+   <Id>SETL-S0000001-123456</Id>
+   <Acct><Id><Othr><Id>123456</Id></Othr></Id><Ownr><Nm>ACQUIRER 123456</Nm></Ownr></Acct>
+   <Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="USD">0.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-07</Dt></Dt></Bal>
+   <Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="USD">23.45</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-07</Dt></Dt></Bal>
+   <Ntry><Amt Ccy="USD">28.75</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-10-06</Dt></BookgDt><ValDt><Dt>2026-10-07</Dt></ValDt><AcctSvcrRef>S0000001</AcctSvcrRef><AddtlNtryInf>Purchases cleared</AddtlNtryInf></Ntry>
+   <Ntry><Amt Ccy="USD">5.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-10-06</Dt></BookgDt><ValDt><Dt>2026-10-07</Dt></ValDt><AcctSvcrRef>S0000001</AcctSvcrRef><AddtlNtryInf>Refunds cleared</AddtlNtryInf></Ntry>
+   <Ntry><Amt Ccy="USD">0.29</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-10-06</Dt></BookgDt><ValDt><Dt>2026-10-07</Dt></ValDt><AcctSvcrRef>S0000001</AcctSvcrRef><AddtlNtryInf>Interchange paid</AddtlNtryInf></Ntry>
+   <Ntry><Amt Ccy="USD">0.01</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-10-06</Dt></BookgDt><ValDt><Dt>2026-10-07</Dt></ValDt><AcctSvcrRef>S0000001</AcctSvcrRef><AddtlNtryInf>Scheme fee</AddtlNtryInf></Ntry>
+  </Stmt>
+ </BkToCstmrStmt>
+</Document>

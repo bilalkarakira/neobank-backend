@@ -1,0 +1,6 @@
+MTI 0810  (ISO 8583:1987, Network management, Request response, Acquirer)
+Data elements present: [7, 11, 39, 70]
+  DE   7  Transmission date and time           1006115900
+  DE  11  System trace audit number            000100
+  DE  39  Response code                        00
+  DE  70  Network management information code  001
