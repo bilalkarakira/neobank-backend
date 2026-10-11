@@ -22,7 +22,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
- * The issuer's side of clearing (SPEC-P4-clearing.md, section 5). One pass does three things, each safe to repeat after a
+ * The issuer's side of clearing. One pass does three things, each safe to repeat after a
  * crash because its state is in the database:
  * <ol>
  *   <li>look at each new file in {@code issuer-in/}: check it as a whole (a bad one is refused and posts nothing), then post

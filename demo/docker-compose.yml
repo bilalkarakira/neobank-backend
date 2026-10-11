@@ -1,4 +1,5 @@
-# The whole simulation on one machine:  docker compose up --build   (from this folder, with the four repos side by side)
+# The whole simulation on one machine:  docker compose up --build   (from this folder; the web app is built from the
+# neobank-frontend repository, cloned next to this one: ../../neobank-frontend)
 #
 #   http://127.0.0.1:4200   the bank (web app)          demo@neobank.local / DemoPassw0rd   admin@neobank.local / AdminPassw0rd
 #   http://127.0.0.1:9000   the virtual POS (the shop)   pay with the demo card, close the day
@@ -27,7 +28,7 @@ services:
   neobank:
     build:
       context: ..
-      dockerfile: neobank-demo/docker/backend.Dockerfile
+      dockerfile: demo/docker/backend.Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,7 +46,7 @@ services:
   network:
     build:
       context: ..
-      dockerfile: neobank-demo/docker/cardnet.Dockerfile
+      dockerfile: demo/docker/cardnet.Dockerfile
     command: ["/app/network.jar"]
     depends_on:
       postgres:
@@ -63,7 +64,7 @@ services:
   acquirer:
     build:
       context: ..
-      dockerfile: neobank-demo/docker/cardnet.Dockerfile
+      dockerfile: demo/docker/cardnet.Dockerfile
     command: ["/app/acquirer.jar"]
     depends_on:
       postgres:
@@ -83,8 +84,7 @@ services:
 
   frontend:
     build:
-      context: ..
-      dockerfile: neobank-demo/docker/frontend.Dockerfile
+      context: ../../neobank-frontend
     depends_on:
       - neobank
     ports:

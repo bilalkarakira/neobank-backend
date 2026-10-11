@@ -2,14 +2,14 @@
 
 ## The pieces
 
-| Piece | Repository | Technology | Listens on (host) | What it does |
+| Piece | Where | Technology | Listens on (host) | What it does |
 |---|---|---|---|---|
-| NeoBank | `neobank-backend` | Spring Boot 4, JPA, Flyway, PostgreSQL | 8080 (API); ISO 8583 on 8583 *inside* the compose network | accounts, ledger, cards, the **issuer** (authorization, holds, reversals, advices), clearing ingest, settlement ingest, reconciliation, admin |
-| Web app | `neobank-frontend` | Angular, Tailwind, served by nginx | 4200 | customer pages (accounts, transfers, history, cards) and admin pages (clearing, settlement, ...) |
-| Card network | `neobank-cardnet/network` | plain Java 21, JDK `HttpServer`, virtual threads | 9100 (control API); the acquirer port 8601 inside the network | routes by BIN, link to the issuer, timeouts, stand-in, advices, clearing checks and fees, settlement |
-| Acquirer and POS | `neobank-cardnet/acquirer` | plain Java 21 | 9000 | the shop's side: payments, durable reversals, voids, tips, refunds, batch close, the virtual POS web page |
-| Codec | `neobank-cardnet/iso8583` | plain Java 21, no dependencies | | ISO 8583:1987 packager, TCP framing, inspector, PIN block, the clearing and acknowledgement file formats |
-| Shared | `neobank-cardnet/shared` | plain Java + JDBC + Flyway | | PAN vault (AES-GCM), the reversal queue, sequences, the shared-folder helpers |
+| NeoBank | the repository root (`src/`) | Spring Boot 4, JPA, Flyway, PostgreSQL | 8080 (API); ISO 8583 on 8583 *inside* the compose network | accounts, ledger, cards, the **issuer** (authorization, holds, reversals, advices), clearing ingest, settlement ingest, reconciliation, admin |
+| Web app | the `neobank-frontend` repository | Angular, Tailwind, served by nginx | 4200 | customer pages (accounts, transfers, history, cards) and admin pages (clearing, settlement, ...) |
+| Card network | `cardnet/network` | plain Java 21, JDK `HttpServer`, virtual threads | 9100 (control API); the acquirer port 8601 inside the network | routes by BIN, link to the issuer, timeouts, stand-in, advices, clearing checks and fees, settlement |
+| Acquirer and POS | `cardnet/acquirer` | plain Java 21 | 9000 | the shop's side: payments, durable reversals, voids, tips, refunds, batch close, the virtual POS web page |
+| Codec | `cardnet/iso8583` | plain Java 21, no dependencies | | ISO 8583:1987 packager, TCP framing, inspector, PIN block, the clearing and acknowledgement file formats |
+| Shared | `cardnet/shared` | plain Java + JDBC + Flyway | | PAN vault (AES-GCM), the reversal queue, sequences, the shared-folder helpers |
 | PostgreSQL | | postgres:17 | not published | database `neobank` (NeoBank) and database `cardnet` (the network and the acquirer) |
 
 ## How they talk
@@ -73,8 +73,8 @@ flowchart TB
 
 ## Where to read the code
 
-- **Issuer rules** (the order matters): `neobank-backend/.../card/auth/AuthorizationEngine.java`
+- **Issuer rules** (the order matters): `src/.../card/auth/AuthorizationEngine.java`
 - **Clearing at the issuer**: `.../card/clearing/ClearingPoster.java`; **settlement**: `SettlementPoster.java`; **reconciliation**: `SettlementReconciliation.java`
-- **The network**: `neobank-cardnet/network/.../PaymentRouter.java` (routing, stand-in), `ClearingProcessor.java`, `SettlementService.java`
-- **The acquirer**: `neobank-cardnet/acquirer/.../AcquirerService.java`, `AcquirerClearing.java`
-- **The codec**: `neobank-cardnet/iso8583/.../Packager.java`, `clearing/ClearingFileCodec.java`
+- **The network**: `cardnet/network/.../PaymentRouter.java` (routing, stand-in), `ClearingProcessor.java`, `SettlementService.java`
+- **The acquirer**: `cardnet/acquirer/.../AcquirerService.java`, `AcquirerClearing.java`
+- **The codec**: `cardnet/iso8583/.../Packager.java`, `clearing/ClearingFileCodec.java`

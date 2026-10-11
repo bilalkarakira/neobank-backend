@@ -34,7 +34,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
- * The network's side of clearing (SPEC-P4-clearing.md, section 4). One beat does four things, each safe to repeat after a
+ * The network's side of clearing. One beat does four things, each safe to repeat after a
  * crash because its state is in the database:
  * <ol>
  *   <li>look at each new file in {@code acquirer-out/}: check the file as a whole (any failure refuses it and processes

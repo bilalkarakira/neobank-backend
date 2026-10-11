@@ -3,6 +3,6 @@
 **/dist
 **/target
 **/data
-neobank-frontend
-neobank-demo
+demo
 docs
+.github

@@ -37,7 +37,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
- * The network's side of disputes (SPEC-P6a-chargebacks.md, section 3). Like {@link ClearingProcessor} one beat does the same four
+ * The network's side of disputes. Like {@link ClearingProcessor} one beat does the same four
  * things, each safe to repeat after a crash: look at new dispute files (chargebacks an issuer left in {@code issuer-out/},
  * representments an acquirer left in {@code acquirer-out/}), check every item against what the network itself cleared, write the
  * file for the other side, and acknowledge the sender.

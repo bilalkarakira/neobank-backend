@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Cash withdrawals at a cash machine (SPEC-P6b-atm.md): processing code 01, the PIN, the cash limits, clearing. */
+/** Cash withdrawals at a cash machine: processing code 01, the PIN, the cash limits, clearing. */
 @SpringBootTest(properties = { "app.cards.listener.enabled=true", "app.cards.listener.port=0", "app.cards.velocity-max=1000" })
 @AutoConfigureMockMvc
 @Import({ TestcontainersConfiguration.class, TestClockConfiguration.class })

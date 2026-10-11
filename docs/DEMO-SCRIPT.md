@@ -1,9 +1,9 @@
 # The five-minute walk-through
 
-Start the stack (`docker compose up --build`, wait until it settles) and open three browser tabs: the **bank**
+Start the stack (`docker compose up --build` in the `demo/` folder, wait until it settles) and open three browser tabs: the **bank**
 (http://127.0.0.1:4200, sign in as `demo@neobank.local` / `DemoPassw0rd`), the **shop** (http://127.0.0.1:9000) and, in a private
 window or another browser, the **bank's admin** view (same address, `admin@neobank.local` / `AdminPassw0rd`).
-Prefer to watch it happen in a terminal? `java scenario/Scenario.java` plays steps 1 to 9 for you with the expected outcome of each.
+Prefer to watch it happen in a terminal? `java scenario/Scenario.java` (from the `demo/` folder) plays a whole card day for you and checks the outcome of every step.
 
 ## 1. A payment (30 seconds)
 
@@ -36,7 +36,7 @@ day** (End of day section): a clearing file goes to the network, which checks it
 ## 5. Refund and settlement (60 seconds)
 
 *Shop:* **Refund** part of a cleared payment, **Close the day** again, then run the end of day:
-`java ../neobank-cardnet/tools/Eod.java` (or `curl -X POST http://127.0.0.1:9100/settlement/run`). It prints the net movement for the
+`java ../cardnet/tools/Eod.java` (from the `demo/` folder) (or `curl -X POST http://127.0.0.1:9100/settlement/run`). It prints the net movement for the
 issuer, the acquirer and the network (they add up to zero).  
 *Admin, Settlement:* the statement is **Matched and posted** (NeoBank recomputed the figures itself); the three totals
 (authorized, cleared, settled) and the differences list: the tip shows up as "Amount changed". *Lesson: reconciliation is
@@ -89,4 +89,4 @@ representment are in the next statement (a refund and a purchase), and NeoBank m
 ```bash
 docker compose exec network sh -c "ls /data/clearing/settlement-out"     # the CSV and camt.053-style XML statements
 ```
-The checked-in samples (`neobank-cardnet/samples/`) show every file and message type without running anything.
+The checked-in samples (`cardnet/samples/`) show every file and message type without running anything.

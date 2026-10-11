@@ -35,7 +35,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * The acquirer's side of capture and clearing (SPEC-P4-clearing.md, section 3): change the amount of an approved payment
+ * The acquirer's side of capture and clearing: change the amount of an approved payment
  * (a tip), refund a cleared one, close the day into one clearing file, and read the network's acknowledgement of it.
  *
  * <p>Closing the day is two steps so that a crash cannot lose or double a payment: first, in ONE database transaction, every

@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * The issuer's side of sending chargebacks (SPEC-P6a-chargebacks.md, section 3). One pass does three things, each safe to repeat
+ * The issuer's side of sending chargebacks. One pass does three things, each safe to repeat
  * after a crash because its state is in the database:
  * <ol>
  *   <li>put the disputes that are FILED and in no file yet into dispute files, one per business date (the file row and the

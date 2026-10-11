@@ -3,7 +3,7 @@ package com.bilal.cardnet.acquirer;
 import java.time.Duration;
 import java.util.List;
 
-/** Every setting of the acquirer and its POS console, with the defaults of SPEC-P3-network.md. */
+/** Every setting of the acquirer and its POS console, with their defaults. */
 public final class AcquirerConfig {
 
     /** A shop the virtual POS can pay at. {@code id} is the 15-character card acceptor id (DE 42). */

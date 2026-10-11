@@ -9,8 +9,7 @@ import java.util.HexFormat;
 import java.util.List;
 
 /**
- * The two statements written for each participant of a settlement run (totals only, no card data; readable on purpose, see
- * SPEC-P5-settlement.md section 2): a plain CSV with a SHA-256 over its lines, and a camt.053-STYLE XML statement. The XML is a
+ * The two statements written for each participant of a settlement run (totals only, no card data; readable on purpose): a plain CSV with a SHA-256 over its lines, and a camt.053-STYLE XML statement. The XML is a
  * simplified subset of ISO 20022 camt.053 (well formed, same totals as the CSV), NOT validated against the ISO schema.
  */
 public final class SettlementFiles {

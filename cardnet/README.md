@@ -1,9 +1,9 @@
 # cardnet
 
 A simulated card network around NeoBank, built to show how a card payment really moves: ISO 8583 messages in real time,
-then clearing and settlement files later. NeoBank (the sibling `neobank-backend` project) is the issuer.
+then clearing and settlement files later. NeoBank (the Spring Boot application in the root of this repository) is the issuer.
 
-Built: the ISO 8583 codec, the network switch (routing, stand-in, advices), the acquirer with a virtual POS, clearing, settlement and reconciliation files, chargebacks, a cash machine, additions to a payment, and online payments with a security code and the customer's approval. The best place to start is the overview in the `neobank-demo` repository (its README, architecture notes and limits).
+Built: the ISO 8583 codec, the network switch (routing, stand-in, advices), the acquirer with a virtual POS, clearing, settlement and reconciliation files, chargebacks, a cash machine, additions to a payment, and online payments with a security code and the customer's approval. The best place to start is the top-level README of this repository and its `docs/` folder (how it works, architecture, limits).
 
 ## Modules
 
@@ -83,7 +83,7 @@ It answers every file as posted and posts nothing. Fees (merchant discount 2.00%
 
 ## Settlement and the end-of-day tool
 
-After clearing, the network turns the cleared items of a business day into **one net movement per participant** (see the settlement section of the `neobank-demo` README): for each cleared purchase the issuer pays amount - interchange + its scheme fee, the acquirer receives amount - interchange - its scheme fee, the network receives both scheme fees; the three add up to zero, and a refund reverses every sign. The run has a value date (the next business day; weekends and `CARDNET_HOLIDAYS=2026-12-25,...` skipped) and writes, per participant, a CSV and a camt.053-STYLE XML statement into `settlement-out/` of the clearing folder (totals only, readable on purpose, not encrypted, not schema-validated: a simulation).
+After clearing, the network turns the cleared items of a business day into **one net movement per participant** (see the settlement section of `docs/HOW-IT-WORKS.md` in the repository root): for each cleared purchase the issuer pays amount - interchange + its scheme fee, the acquirer receives amount - interchange - its scheme fee, the network receives both scheme fees; the three add up to zero, and a refund reverses every sign. The run has a value date (the next business day; weekends and `CARDNET_HOLIDAYS=2026-12-25,...` skipped) and writes, per participant, a CSV and a camt.053-STYLE XML statement into `settlement-out/` of the clearing folder (totals only, readable on purpose, not encrypted, not schema-validated: a simulation).
 
 ```
 POST http://127.0.0.1:9100/settlement/run[?date=2026-10-06]    one run (the oldest unsettled day when no date)

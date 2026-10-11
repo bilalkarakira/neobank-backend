@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-/** Every setting of the network, with the defaults of SPEC-P3-network.md. Tests change the public fields they need. */
+/** Every setting of the network, with their defaults. Tests change the public fields they need. */
 public final class NetworkConfig {
 
     /** Card numbers that start with {@code prefix} are routed to the issuer at host:port. */

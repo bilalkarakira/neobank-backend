@@ -24,7 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * The network's settlement (SPEC-P5-settlement.md sections 1 and 2): turns the cleared items of one business date into one net
+ * The network's settlement: turns the cleared items of one business date into one net
  * movement per participant, labels it with a value date (T+1 business day) and writes a CSV and a camt.053-style XML statement for
  * each participant. For one cleared purchase X with interchange I and scheme fees S (acquirer) and T (issuer):
  * the issuer pays X - I + T, the acquirer receives X - I - S, the network receives S + T; the three add up to zero. A refund is

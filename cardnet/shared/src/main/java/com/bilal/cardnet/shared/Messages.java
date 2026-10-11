@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * The one place that knows how messages between acquirer, network and issuer are built and read, so the conventions
- * the issuer relies on (see SPEC-P2-issuer.md) cannot drift between the processes.
+ * the issuer relies on cannot drift between the processes.
  */
 public final class Messages {
 

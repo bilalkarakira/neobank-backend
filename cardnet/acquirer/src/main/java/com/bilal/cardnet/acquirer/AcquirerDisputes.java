@@ -35,7 +35,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
- * The acquirer's side of disputes (SPEC-P6a-chargebacks.md, section 3): chargebacks arrive from the network in {@code acquirer-in/*.dsp},
+ * The acquirer's side of disputes: chargebacks arrive from the network in {@code acquirer-in/*.dsp},
  * are matched to the payment they dispute and acknowledged; the shop may then REPRESENT a chargeback once, which writes a representment
  * file for the network. Money moved already at the network's settlement (a chargeback is refund-like there): this class only keeps
  * the shop's records and carries its answer.

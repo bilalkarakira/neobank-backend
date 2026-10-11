@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Duration;
 
 /**
- * Settings of card disputes (docs/SPEC-P6a-chargebacks.md). {@code window} is how long the shop has to answer a chargeback the
+ * Settings of card disputes. {@code window} is how long the shop has to answer a chargeback the
  * network accepted: when it has passed without a representment the dispute is WON and the customer's credit is final. The
  * demo stack sets it to seconds; the default is two weeks.
  */

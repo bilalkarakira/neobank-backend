@@ -1,23 +1,23 @@
 # Faster start-up: use jars and a web build you made yourself instead of compiling inside Docker.
 #
-#   (cd ../neobank-cardnet && ./mvnw install -DskipTests)
-#   (cd ../neobank-backend && ./mvnw package -DskipTests)
-#   (cd ../neobank-frontend && npm ci && npx ng build)
+#   (cd ../cardnet && ./mvnw install -DskipTests)
+#   (cd .. && ./mvnw package -DskipTests)
+#   (cd ../../neobank-frontend && npm ci && npx ng build)
 #   docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up --build
 services:
   neobank:
     build:
       context: ..
-      dockerfile: neobank-demo/docker/prebuilt-backend.Dockerfile
+      dockerfile: demo/docker/prebuilt-backend.Dockerfile
   network:
     build:
       context: ..
-      dockerfile: neobank-demo/docker/prebuilt-cardnet.Dockerfile
+      dockerfile: demo/docker/prebuilt-cardnet.Dockerfile
   acquirer:
     build:
       context: ..
-      dockerfile: neobank-demo/docker/prebuilt-cardnet.Dockerfile
+      dockerfile: demo/docker/prebuilt-cardnet.Dockerfile
   frontend:
     build:
-      context: ..
-      dockerfile: neobank-demo/docker/prebuilt-frontend.Dockerfile
+      context: ../../neobank-frontend
+      dockerfile: Dockerfile.prebuilt

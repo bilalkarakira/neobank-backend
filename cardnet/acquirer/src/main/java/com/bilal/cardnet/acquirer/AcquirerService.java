@@ -18,7 +18,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * What the acquirer does for its terminal (SPEC-P3-network.md, section 4): build the payment, send it with a timeout, and when
+ * What the acquirer does for its terminal: build the payment, send it with a timeout, and when
  * it is unsure what happened, cancel it with a reversal that is retried until the issuer acknowledges it. An answer that did
  * not come is never guessed: the payment is reported as cancelled, never as approved.
  */

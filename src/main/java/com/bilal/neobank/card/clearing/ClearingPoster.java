@@ -32,7 +32,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Posts ONE cleared item (a first presentment, 1240) to the books, in ONE database transaction (SPEC-P4-clearing.md, section 5).
+ * Posts ONE cleared item (a first presentment, 1240) to the books, in ONE database transaction.
  * The item row is inserted first under a unique (file, record) key, so however many ingests run at once an item is posted once:
  * the second one waits for the first and then finds the row. Lock order as everywhere: the account row first.
  *

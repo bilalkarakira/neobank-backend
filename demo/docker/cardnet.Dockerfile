@@ -1,8 +1,8 @@
-# The card network and the acquirer (two programs, one image). Build context: the folder that holds the four repos.
+# The card network and the acquirer (two programs, one image). Build context: the root of this repository.
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /src
-COPY neobank-cardnet/ neobank-cardnet/
-RUN cd neobank-cardnet && mvn -q -B -Dmaven.test.skip=true package \
+COPY cardnet/ cardnet/
+RUN cd cardnet && mvn -q -B -Dmaven.test.skip=true package \
     && cp network/target/network-*-SNAPSHOT.jar /network.jar && cp acquirer/target/acquirer-*-SNAPSHOT.jar /acquirer.jar
 
 FROM eclipse-temurin:21-jre

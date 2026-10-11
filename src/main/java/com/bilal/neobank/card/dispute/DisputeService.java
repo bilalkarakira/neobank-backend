@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * A customer disputes a cleared card payment (SPEC-P6a-chargebacks.md). Filing is ONE database transaction: the dispute row is
+ * A customer disputes a cleared card payment. Filing is ONE database transaction: the dispute row is
  * inserted first under a unique authorization id (so two clicks make one dispute), then the chargeback item and the provisional
  * credit. The chargeback file for the network is written later by {@link DisputeFileWriter}.
  */

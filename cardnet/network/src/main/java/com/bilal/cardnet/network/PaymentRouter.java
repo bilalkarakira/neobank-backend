@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 /**
- * What the network does with a payment or a reversal from an acquirer (SPEC-P3-network.md, section 3):
+ * What the network does with a payment or a reversal from an acquirer:
  * route by BIN, ask the issuer, and when the issuer cannot answer in time either stand in (small purchases) or say 91.
  * An issuer approval that arrives after the network already answered on its own is dealt with so nothing is left
  * hanging: reversed when the shop was told no, kept when the shop was told yes.

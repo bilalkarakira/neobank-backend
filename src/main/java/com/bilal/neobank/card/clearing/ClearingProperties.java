@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 
 /**
- * Settings of the clearing file exchange with the card network (see docs/SPEC-P4-clearing.md). {@code dir} is the folder shared
+ * Settings of the clearing file exchange with the card network. {@code dir} is the folder shared
  * with the network and the acquirer (this bank reads {@code issuer-in/} and writes {@code issuer-out/}); {@code fileSecret} is
  * the text the file key is made from and must be the same in every process that reads or writes clearing files. The shipped
  * default is for development only. The two rates are the ones agreed with the network (interchange NeoBank earns, scheme fee it

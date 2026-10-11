@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Decides and posts ONE settlement statement of the network, in ONE database transaction (SPEC-P5-settlement.md, section 3).
+ * Decides and posts ONE settlement statement of the network, in ONE database transaction.
  * The statement's row is inserted first under a unique file name, so however many ingests run at once a statement is decided once.
  *
  * <p>NeoBank does not trust the figures: it adds up the items it posted for that business date itself (amounts as cleared, the

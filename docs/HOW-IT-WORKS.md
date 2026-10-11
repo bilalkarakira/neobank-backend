@@ -1,4 +1,4 @@
-# NeoBank: a card payment, end to end, on your own machine
+# How it works: a card payment, end to end, on your own machine
 
 A learning project that follows **one card payment** through everything that happens in the real world, in the order it happens:
 the shop's terminal asks, the card network routes, the bank (the *issuer*) decides in real time with an **ISO 8583** message and
@@ -9,22 +9,20 @@ and what was settled agree.
 > **Honest scope.** NeoBank is a **card-issuing neobank simulation**, not a bank. No licence, no KYC or AML, no real card scheme:
 > the messages are ISO 8583:1987 plus common usage, *not* a Visa or Mastercard profile (test card numbers start with 999900).
 > Settlement is simulated: no real settlement bank, and the statements are readable, unsigned files. All keys are development
-> defaults. One acquirer, one issuer. Do not point this at anything real. See [docs/LIMITS.md](docs/LIMITS.md).
+> defaults. One acquirer, one issuer. Do not point this at anything real. See [LIMITS.md](LIMITS.md).
 
 ## Run it (one command)
 
-You need **Docker** and the four repositories cloned **side by side**:
+You need **Docker**, and the two repositories cloned **side by side**:
 
 ```
 somefolder/
-  neobank-backend/    NeoBank: the issuer and the bank (Spring Boot, PostgreSQL, Flyway)
+  neobank-backend/    NeoBank (the issuer, Spring Boot), the card network and the shop (cardnet/), the demo stack (demo/), the docs
   neobank-frontend/   the bank's web app (Angular)
-  neobank-cardnet/    the card network, the acquirer with its virtual POS, and the ISO 8583 codec (Java)
-  neobank-demo/       this repository: compose file, scenario runner, docs
 ```
 
 ```bash
-cd neobank-demo
+cd neobank-backend/demo
 docker compose up --build        # the first build downloads and compiles everything: a few minutes
 java scenario/Scenario.java      # in a second terminal (JDK 21+): plays a whole card day and checks the outcome
 docker compose down -v           # stops everything and deletes its data
@@ -34,7 +32,7 @@ docker compose down -v           # stops everything and deletes its data
 (`docker-compose.prebuilt.yml`; handy while changing the code):
 
 ```bash
-(cd ../neobank-cardnet && ./mvnw install -DskipTests) && (cd ../neobank-backend && ./mvnw package -DskipTests) && (cd ../neobank-frontend && npm ci && npx ng build)
+(cd ../cardnet && ./mvnw install -DskipTests) && (cd .. && ./mvnw package -DskipTests) && (cd ../../neobank-frontend && npm ci && npx ng build)
 docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up --build
 ```
 
@@ -47,11 +45,11 @@ docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up --build
 | http://127.0.0.1:9100 | the card network's control API (status, chaos switches, settlement) | |
 
 Everything is published to `127.0.0.1` only. The ISO 8583 ports are reachable between the containers and not published at all.
-The demo customer's test card is `9999 0000 0000 0012`, PIN `4321` (a published test number, not a secret).
+The demo customer's test card is `9999 0000 0000 0012`, PIN `4321`, security code `123` (published test values, not secrets).
 The scenario can be run once per ten minutes (a card may be approved ten times in ten minutes).
 
-The **five-minute walk-through** is in [docs/DEMO-SCRIPT.md](docs/DEMO-SCRIPT.md). New to card payments? Start with the
-[glossary](docs/GLOSSARY.md).
+The **five-minute walk-through** is in [DEMO-SCRIPT.md](DEMO-SCRIPT.md). New to card payments? Start with the
+[glossary](GLOSSARY.md).
 
 ## The four parties
 
@@ -70,8 +68,8 @@ flowchart LR
     NET ==>|settlement statements| ISS
 ```
 
-Three processes (plus the bank's web app and a database): **NeoBank** (`neobank-backend`) is the issuer. The **network** and the
-**acquirer** (`neobank-cardnet`) are separate programs that talk to each other and to NeoBank over TCP with real ISO 8583 messages
+Three processes (plus the bank's web app and a database): **NeoBank** (the Spring Boot application in the repository root) is the issuer. The **network** and the
+**acquirer** (the `cardnet/` folder) are separate programs that talk to each other and to NeoBank over TCP with real ISO 8583 messages
 and exchange files through a shared folder, the way banks use file transfers.
 
 ## What happens, in order
@@ -233,40 +231,40 @@ reversals. The scenario runner does the first one for you.
 ## Look inside the files
 
 ```
-neobank-cardnet/samples/     ISO 8583 messages (text, hex, decoded), a clearing file and its dump, an acknowledgement, settlement CSV and XML
+cardnet/samples/     ISO 8583 messages (text, hex, decoded), a clearing file and its dump, an acknowledgement, settlement CSV and XML
 ```
 Clearing files are encrypted (they carry card numbers); `ClearingDump` decrypts one with every card number masked. The samples
-are decoded by a test on every build, so they cannot rot. ISO 8583 notes: `neobank-cardnet/docs/ISO8583-spec.md`.
+are decoded by a test on every build, so they cannot rot. ISO 8583 notes: `cardnet/docs/ISO8583-spec.md`.
 
 ## Tests
 
-| Repository | How | What |
+| Where | How | What |
 |---|---|---|
-| neobank-cardnet | `./mvnw test` (Docker running: Testcontainers) | codec, network, acquirer, clearing, settlement, samples |
-| neobank-backend | `./mvnw test` (Docker running) | issuer rules, holds, clearing, settlement, ledger, API |
-| neobank-frontend | `npx ng test --watch=false` | every page |
-| everything | `java scenario/Scenario.java` against the running stack | a whole day, end to end |
+| `cardnet/` (this repository) | `cd cardnet && ./mvnw test` (Docker running: Testcontainers) | codec, network, acquirer, clearing, settlement, samples |
+| the repository root | `./mvnw test` (Docker running; the codec must be installed first, see the README) | issuer rules, holds, clearing, settlement, ledger, API |
+| `neobank-frontend` (other repository) | `npx ng test --watch=false` | every page |
+| everything | `java scenario/Scenario.java` (from `demo/`) against the running stack | a whole day, end to end |
 
 Beyond the unit tests, the important behaviours were **mutation-checked**: break the code on purpose and confirm that a test fails.
 
 ## Continuous integration
 
-Each repository has a workflow in `.github/workflows/ci.yml` that runs on every push and pull request:
+The backend repository has one workflow (`.github/workflows/ci.yml`) and the frontend repository has its own. They run on every push and pull request:
 
-| Repository | What the workflow does |
-|---|---|
-| neobank-cardnet | `./mvnw clean verify`: every module and every test (the tests start a real PostgreSQL in Docker) |
-| neobank-backend | checks out neobank-cardnet, installs its codec, then `./mvnw clean verify` |
-| neobank-frontend | `npm ci`, the unit tests, the production build |
-| neobank-demo | the scenario runner compiles and both compose files are valid; **and** (on the default branch, on demand and every night) the four repositories are checked out side by side, the stack is built with `docker compose up --build` and `scenario/Scenario.java` plays a whole card day against it |
+| Repository | Job | What it does |
+|---|---|---|
+| backend | `cardnet` | `cd cardnet && ./mvnw clean verify`: every module and every test (the tests start a real PostgreSQL in Docker) |
+| backend | `backend` | installs the codec from `cardnet/`, then `./mvnw clean verify` |
+| backend | `static` | the scenario runner compiles and both compose files are valid |
+| backend | `scenario` | on the default branch, on demand and every night: builds the images, starts the stack (without the web app) and plays the whole card day with `demo/scenario/Scenario.java` |
+| frontend | `build` | `npm ci`, the unit tests, the production build |
+| frontend | `docker` | the Dockerfile builds |
 
-The workflows assume the four repositories live under the same GitHub owner with these names and can be read by the workflow
-(public, or give `actions/checkout` a token). The workflows have been run only as their individual commands, on a clean export of
-the committed code on Windows with JDK 27 (the code is compiled for Java 21); they have not run on GitHub yet. The whole stack was also built from the Dockerfiles with `docker compose up --build` (from a clean export of the committed code) and the full scenario passed on it: 57 checks, 0 failures.
+The code is compiled for Java 21 and was developed with JDK 27 on Windows. The whole stack was also built from the Dockerfiles with `docker compose up --build` and the full scenario passed on it: 57 checks, 0 failures.
 
 ## More
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the pieces, the ports, the files, the databases, and the main design decisions
-- [docs/DEMO-SCRIPT.md](docs/DEMO-SCRIPT.md): the five-minute walk-through
-- [docs/GLOSSARY.md](docs/GLOSSARY.md): issuer, acquirer, authorization, clearing, settlement, interchange, and the rest
-- [docs/LIMITS.md](docs/LIMITS.md): what is simulated, what is simplified and what is not built
+- [ARCHITECTURE.md](ARCHITECTURE.md): the pieces, the ports, the files, the databases, and the main design decisions
+- [DEMO-SCRIPT.md](DEMO-SCRIPT.md): the five-minute walk-through
+- [GLOSSARY.md](GLOSSARY.md): issuer, acquirer, authorization, clearing, settlement, interchange, and the rest
+- [docs/LIMITS.md](LIMITS.md): what is simulated, what is simplified and what is not built

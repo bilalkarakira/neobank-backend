@@ -50,7 +50,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Card disputes at the issuer (SPEC-P6a-chargebacks.md): filing, the chargeback file, the network's answer, representments, WON, settlement and the books. */
+/** Card disputes at the issuer: filing, the chargeback file, the network's answer, representments, WON, settlement and the books. */
 @SpringBootTest(properties = { "app.cards.listener.enabled=true", "app.cards.listener.port=0", "app.cards.velocity-max=1000" })
 @AutoConfigureMockMvc
 @Import({ TestcontainersConfiguration.class, TestClockConfiguration.class })

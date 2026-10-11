@@ -1,9 +1,7 @@
 **/.git
-**/node_modules
-**/dist
 **/target
 **/data
-neobank-frontend
-neobank-backend
-neobank-demo
+src
+demo
 docs
+.github

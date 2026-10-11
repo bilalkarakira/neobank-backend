@@ -30,7 +30,7 @@ import java.util.Optional;
 
 /**
  * The issuer's decision: should this card payment be approved? Rules run in a fixed order and the first one that fails
- * answers (see docs/SPEC-P2-issuer.md section 4). Everything happens in ONE transaction that holds the account's row
+ * answers. Everything happens in ONE transaction that holds the account's row
  * lock from the first read of the balance to the insert of the hold, so concurrent requests for one account queue up.
  *
  * <p>Declines are recorded too (they are replayed for a duplicate and shown to the customer). The only exceptions are

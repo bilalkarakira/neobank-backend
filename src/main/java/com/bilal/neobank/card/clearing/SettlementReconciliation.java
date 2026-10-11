@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Three-way reconciliation of a card business day (SPEC-P5-settlement.md section 4), read-only, from NeoBank's own records:
+ * Three-way reconciliation of a card business day, read-only, from NeoBank's own records:
  * what was <b>authorized</b>, what was <b>cleared</b> and what was <b>settled</b>, plus the ledger. Every difference is a
  * {@link Finding} with a plain sentence; things that are merely not finished yet (cleared but not settled) are listed
  * separately and are not findings. Only the last four digits of a card are ever shown.
