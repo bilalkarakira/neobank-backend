@@ -1,0 +1,88 @@
+# Two jobs.
+#
+#  static    on every push: the scenario runner compiles and both compose files are valid.
+#  scenario  the whole simulation end to end: the four repositories are checked out side by side (as the compose files expect),
+#            the images are built, the stack is started and the scenario runner plays a whole card day against it (payments,
+#            clearing, settlement, disputes, cash). It fails when any expectation is not met. It takes a while, so it runs on
+#            pushes to the default branch, on demand, and every night.
+#
+# The sibling repositories are checked out from the same owner (they must be readable by this workflow: public, or give
+# actions/checkout a token).
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: The scenario runner compiles
+        run: javac -d "$RUNNER_TEMP/scenario" scenario/Scenario.java
+
+      - name: Both compose files are valid
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml config --quiet
+
+  scenario:
+    if: github.event_name != 'push' || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: neobank-demo
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/neobank-cardnet
+          path: neobank-cardnet
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/neobank-backend
+          path: neobank-backend
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/neobank-frontend
+          path: neobank-frontend
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build the images and start the stack
+        working-directory: neobank-demo
+        run: docker compose up -d --build
+
+      - name: Play the card day
+        working-directory: neobank-demo
+        run: java scenario/Scenario.java
+
+      - name: Show the logs when something failed
+        if: failure()
+        working-directory: neobank-demo
+        run: docker compose logs --no-color --tail=200
+
+      - name: Take the stack down and remove its volumes
+        if: always()
+        working-directory: neobank-demo
+        run: docker compose down -v

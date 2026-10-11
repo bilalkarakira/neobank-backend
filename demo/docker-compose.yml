@@ -1,0 +1,95 @@
+# The whole simulation on one machine:  docker compose up --build   (from this folder, with the four repos side by side)
+#
+#   http://127.0.0.1:4200   the bank (web app)          demo@neobank.local / DemoPassw0rd   admin@neobank.local / AdminPassw0rd
+#   http://127.0.0.1:9000   the virtual POS (the shop)   pay with the demo card, close the day
+#   http://127.0.0.1:8080   NeoBank's API
+#   http://127.0.0.1:9100   the card network's control API
+#
+# Everything is published to 127.0.0.1 only. All keys are DEVELOPMENT defaults: this is a learning simulation, never real.
+name: neobank
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: neobank
+      POSTGRES_USER: neobank
+      POSTGRES_PASSWORD: neobank
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-cardnet.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neobank -d neobank"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  neobank:
+    build:
+      context: ..
+      dockerfile: neobank-demo/docker/backend.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: demo            # the demo customer, six months of activity, and a demo card
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/neobank
+      CARD_LISTENER_HOST: 0.0.0.0             # the ISO 8583 port: reachable by the network container, NOT published
+      CARDNET_DATA_DIR: /data/clearing        # clearing and settlement files, shared with the network and the acquirer
+      APP_CARDS_DISPUTES_WINDOW: 30s          # how long a shop has to answer a chargeback (two weeks by default); short, so a demo can show "won"
+    volumes:
+      - clearing:/data/clearing
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  network:
+    build:
+      context: ..
+      dockerfile: neobank-demo/docker/cardnet.Dockerfile
+    command: ["/app/network.jar"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      CARDNET_DB_URL: jdbc:postgresql://postgres:5432/cardnet
+      CARDNET_BIND: 0.0.0.0
+      CARDNET_ROUTES: "999900=neobank:8583"   # cards that start with the test BIN go to NeoBank
+      CARDNET_DATA_DIR: /data/clearing
+    volumes:
+      - clearing:/data/clearing
+    ports:
+      - "127.0.0.1:9100:9100"
+
+  acquirer:
+    build:
+      context: ..
+      dockerfile: neobank-demo/docker/cardnet.Dockerfile
+    command: ["/app/acquirer.jar"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      network:
+        condition: service_started
+    environment:
+      CARDNET_DB_URL: jdbc:postgresql://postgres:5432/cardnet
+      CARDNET_BIND: 0.0.0.0
+      CARDNET_NETWORK_HOST: network
+      CARDNET_NETWORK_CONTROL_URL: http://network:9100
+      CARDNET_DATA_DIR: /data/clearing
+    volumes:
+      - clearing:/data/clearing
+    ports:
+      - "127.0.0.1:9000:9000"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: neobank-demo/docker/frontend.Dockerfile
+    depends_on:
+      - neobank
+    ports:
+      - "127.0.0.1:4200:80"
+
+volumes:
+  pgdata:
+  clearing:
