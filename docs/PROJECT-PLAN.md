@@ -83,7 +83,7 @@ checks where numbers matter, and a written report of what was and was not verifi
 | Clean-room builds | everything is built and tested again from an export of the committed code, and the whole stack is built from the Dockerfiles |
 | Continuous integration | GitHub Actions run the builds and tests on every push, and the scenario on the default branch and nightly |
 
-**Test counts at the last full run:** backend 662, card network 123 (codec) + 44 (shared) + 142 (network) + 122 (acquirer), frontend 412.
+**Test counts at the last full run:** backend 667, card network 123 (codec) + 44 (shared) + 142 (network) + 122 (acquirer), frontend 412.
 
 ## 6. Risks and known issues
 
