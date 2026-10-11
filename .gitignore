@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Runtime files of a local run (the shared clearing and settlement folder, see the README) ###
+/data/
