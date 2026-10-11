@@ -37,8 +37,9 @@ acquirer (`cardnet/`), and the demo stack (`demo/`). The web app is in the compa
 [Architecture](#architecture) ·
 [Tech stack](#tech-stack) ·
 [Engineering highlights](#engineering-highlights) ·
-[Quick start](#quick-start-with-docker-recommended) ·
-[Run it locally](#run-it-locally-for-development) ·
+[Getting started](#getting-started) ·
+[Your first payment](#your-first-payment-two-minutes) ·
+[Troubleshooting](#troubleshooting) ·
 [Testing and quality](#testing-and-quality) ·
 [Documentation](#documentation) ·
 [Limits and roadmap](#limits-and-roadmap)
@@ -176,95 +177,184 @@ More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **An approval pays once.** The customer's approval of an online payment is used up in the same transaction as the payment it pays for. The engine checks it and an atomic `UPDATE` guards it again, so two simultaneous requests with one approval produce one payment.
 - **Proof, not hope.** About 1,500 automated tests, mutation checks of the important rules, independent SQL checks of the numbers, a 57-check scenario that plays a whole card day, and clean-room builds of everything from committed code.
 
-## Quick start with Docker (recommended)
+## Getting started
 
-You need **Docker**. Clone this repository and the frontend **side by side** (the demo stack builds the web app from it):
+### What you need
+
+| To do this | You need |
+|---|---|
+| **Run everything with one command** (recommended) | **Docker** (Docker Desktop on Windows and macOS, or Docker Engine with Compose v2 on Linux) and **Git** |
+| Also play the automatic card-day scenario | the above and a **JDK 21 or newer** |
+| **Run each part yourself** and change the code | **JDK 21 or newer**, **Node.js 22 or newer**, **Docker** (for PostgreSQL and for the tests) and **Git** |
+
+These ports must be free: **4200, 8080, 9000, 9100** (and **5433** for the development database).
+
+### Which part is which: the bank and the shop
+
+NeoBank is not one application but a few cooperating ones. You will open **two things in your browser**:
+
+| You open | What it is | Which process |
+|---|---|---|
+| **The bank** (http://127.0.0.1:4200) | the screens of a customer and of the bank's staff | the web app, from the [frontend repository](https://github.com/bilalkarakira/neobank-frontend), talking to the bank's engine |
+| **The shop** (http://127.0.0.1:9000) | a card terminal and online checkout where you *make* payments | the acquirer with its virtual POS (`cardnet/acquirer`) |
+
+Behind them run **the bank's engine** (NeoBank, the Spring Boot API on port 8080, which decides every payment), **the card network**
+(`cardnet/network`, port 9100, which routes payments and settles the day) and a **PostgreSQL** database. **You pay in the shop and you
+see the result in the bank.**
+
+### Option A: Docker, one command (recommended)
+
+Clone this repository and the frontend **into the same parent folder** (the demo stack builds the web app from the frontend repository):
+
+```
+somefolder/
+  neobank-backend/     <- this repository
+  neobank-frontend/    <- the web app
+```
 
 ```bash
 git clone https://github.com/bilalkarakira/neobank-backend.git
 git clone https://github.com/bilalkarakira/neobank-frontend.git
 
 cd neobank-backend/demo
-docker compose up --build        # the first build downloads and compiles everything: a few minutes
+docker compose up --build -d     # the first build downloads and compiles everything: about 5 to 15 minutes
+docker compose ps                # all five services should say "running" (the database "healthy")
 ```
 
-When it has settled, open:
+Give it about a minute after the command returns, then open:
 
 | Address | What it is | Login |
 |---|---|---|
-| http://127.0.0.1:4200 | the bank (web app) | `demo@neobank.local` / `DemoPassw0rd` |
-| http://127.0.0.1:4200 | the same app as the bank's admin | `admin@neobank.local` / `AdminPassw0rd` |
-| http://127.0.0.1:9000 | the virtual POS, the shop's terminal | none (test cards only) |
-| http://127.0.0.1:8080 | NeoBank's API | |
+| http://127.0.0.1:4200 | **the bank** (web app) | `demo@neobank.local` / `DemoPassw0rd` |
+| http://127.0.0.1:4200 | the same app as the bank's **admin** | `admin@neobank.local` / `AdminPassw0rd` |
+| http://127.0.0.1:9000 | **the shop**, the virtual POS | none (test cards only) |
+| http://127.0.0.1:8080 | the bank's engine (API) | |
 | http://127.0.0.1:9100 | the card network's control API | |
 
-The demo customer's test card is **`9999 0000 0000 0012`**, PIN **`4321`**, security code **`123`** (published test values). The shop page
-has "Use the demo card" buttons that fill everything in. Then follow the five-minute walk-through in
-[docs/DEMO-SCRIPT.md](docs/DEMO-SCRIPT.md), or let the scenario runner play a whole card day and check the outcome of every step:
+The demo customer's test card is **`9999 0000 0000 0012`**, expiry **10/29**, PIN **`4321`**, security code **`123`** (published test
+values). The shop page has "Use the demo card" buttons that fill everything in.
+
+**Stop it, and delete its data:**
 
 ```bash
-java scenario/Scenario.java      # in a second terminal, from demo/ (JDK 21+)
-docker compose down -v           # stop everything and delete its data
+docker compose down -v
 ```
 
-The bank allows at most ten approvals per card in ten minutes, so run the scenario once per ten minutes. To start faster while
-changing code, see the "prebuilt" option in [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
+**Only want the engine and the shop, without the web app?** Skip cloning the frontend and start four of the five services:
+`docker compose up --build -d postgres neobank network acquirer`. To start faster while changing code, see the "prebuilt" option in
+[docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
-## Run it locally for development
+**Play a whole card day automatically** (JDK 21+, from the `demo/` folder, with the stack running):
 
-Use this when you want to change the code. You need **JDK 21 or newer**, **Node.js 22 or newer** (for the frontend) and **Docker**
-(for PostgreSQL, and for the tests). On Windows use `.\mvnw.cmd` instead of `./mvnw`.
+```bash
+java scenario/Scenario.java      # payments, declines, stand-in, clearing, settlement, disputes, cash, online payments: 57 checks
+```
 
-**1. A database** (from this repository's root). PostgreSQL listens on port 5433 because 5432 is often taken by a local install:
+The bank allows at most ten approvals per card in ten minutes, so run the scenario once per ten minutes.
+
+### Your first payment (two minutes)
+
+1. Open **the bank**, http://127.0.0.1:4200, log in as the demo customer and open **Cards** in the menu.
+2. Open **the shop**, http://127.0.0.1:9000, in a second tab. In "Take a payment" press **Use the demo card**, enter the amount `25.00` and press **Pay**.
+3. The shop answers **"Approved. Authorization code …"**. Open "The messages" to see the ISO 8583 request and response, decoded.
+4. Back in the bank, press **Show activity** on the card: the 25.00 is **Pending**. The money is *reserved* (Available went down, Reserved went up), but your balance has not changed yet.
+5. In the shop, scroll to "End of day: capture and clearing" and press **Close the day**. After a few seconds the payment is **cleared** in the shop and **Posted** in the bank, and your balance has dropped by 25.00.
+
+[docs/DEMO-SCRIPT.md](docs/DEMO-SCRIPT.md) continues from here: declines, a bank that is down, the cash machine, online payments with the
+customer's approval, refunds, settlement and disputes.
+
+### Option B: run each part yourself (for development)
+
+Use this when you want to change the code. Open **four terminals**, all in this repository's root unless said otherwise (the web app
+is in the other repository). Commands are given for **macOS / Linux (bash)** and for **Windows (PowerShell)**. They differ in a few places:
+Windows uses `.\mvnw.cmd`, PowerShell has no `&&` and needs the dotted Maven setting in quotes.
+
+**1. A database** (any shell). PostgreSQL listens on port 5433 because 5432 is often taken by a local install:
 
 ```bash
 docker compose up -d                      # PostgreSQL :5433 and pgAdmin :5050 (database, user and password: neobank)
 docker exec neobank-postgres psql -U neobank -d postgres -c "create database cardnet"   # the network and the acquirer use their own database
 ```
 
+(Run the second command a few seconds after the first. If you already have a container called `neobank-postgres` from another setup, remove
+or rename it first.)
+
 **2. Build the card network and install the codec** (NeoBank depends on the ISO 8583 codec in `cardnet/`):
 
 ```bash
+# macOS / Linux
 (cd cardnet && ./mvnw install -DskipTests)
 ```
 
-**3. Two settings.** NeoBank, the network and the acquirer exchange the clearing and settlement files through one folder and must all use the **same**
-folder, so set `CARDNET_DATA_DIR` in each terminal before starting its process. NeoBank also needs a short dispute window if you want the scenario
-runner to show a dispute being won (a shop has two weeks to answer a chargeback by default; the Docker stack uses 30 seconds). Bash:
+```powershell
+# Windows (PowerShell)
+cd cardnet; .\mvnw.cmd install -DskipTests; cd ..
+```
+
+**3. Two settings, in every terminal that starts one of the three Java processes.** NeoBank, the network and the acquirer exchange the
+clearing and settlement files through one folder and must all use the **same** folder (`CARDNET_DATA_DIR`). NeoBank also needs a short
+dispute window if you want the scenario runner to show a dispute being won (a shop has two weeks to answer a chargeback by default; the
+Docker stack uses 30 seconds):
 
 ```bash
+# macOS / Linux
 export CARDNET_DATA_DIR="$PWD/data/clearing"
 export APP_CARDS_DISPUTES_WINDOW=30s       # only NeoBank reads this one
 ```
 
-PowerShell:
-
 ```powershell
+# Windows (PowerShell)
 $env:CARDNET_DATA_DIR = "$PWD\data\clearing"
 $env:APP_CARDS_DISPUTES_WINDOW = "30s"
 ```
 
-**4. Start the three Java processes**, each in its own terminal, from this repository's root, with those variables set:
+**4. Start the three Java processes**, one per terminal (terminals 1, 2 and 3), each with the settings of step 3:
 
 ```bash
-./mvnw spring-boot:run -Dspring-boot.run.profiles=demo        # NeoBank: API :8080, ISO 8583 listener 127.0.0.1:8583, demo customer and demo card
-java -jar cardnet/network/target/network-0.1.0-SNAPSHOT.jar   # the card network: control API :9100, routes card numbers 999900... to NeoBank
-java -jar cardnet/acquirer/target/acquirer-0.1.0-SNAPSHOT.jar # the acquirer and the virtual POS: http://127.0.0.1:9000
+# terminal 1, macOS / Linux: NeoBank, the bank's engine (API :8080, ISO 8583 listener 127.0.0.1:8583, demo customer and demo card)
+./mvnw spring-boot:run -Dspring-boot.run.profiles=demo
 ```
 
-**5. The web app** (from the `neobank-frontend` repository; it proxies `/api` to port 8080):
+```powershell
+# terminal 1, Windows (PowerShell): the same, with the setting in quotes
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=demo"
+```
+
+```bash
+# terminal 2, any shell: the card network (control API :9100, routes card numbers 999900... to NeoBank)
+java -jar cardnet/network/target/network-0.1.0-SNAPSHOT.jar
+
+# terminal 3, any shell: the acquirer and the shop, http://127.0.0.1:9000
+java -jar cardnet/acquirer/target/acquirer-0.1.0-SNAPSHOT.jar
+```
+
+**5. The web app** (terminal 4, in the `neobank-frontend` repository; it proxies `/api` to port 8080):
 
 ```bash
 npm install
-npm start                       # http://localhost:4200
+npm start                       # the bank: http://localhost:4200
 ```
 
-**6. Try it.** Log in as `demo@neobank.local` / `DemoPassw0rd`, open the shop page (port 9000), press "Use the demo card" and pay.
-`java demo/scenario/Scenario.java` plays a whole card day against these default ports.
+**6. Try it.** Log in as `demo@neobank.local` / `DemoPassw0rd` at http://localhost:4200, open the shop at http://127.0.0.1:9000, press
+"Use the demo card" and pay, as in "Your first payment" above. `java demo/scenario/Scenario.java` plays a whole card day against these default ports.
 
 Settings are environment variables (`CARDNET_*` for the network and the acquirer, `SPRING_*` and `CARD_PAN_KEY` for NeoBank); the defaults
-all line up with the commands above. `cardnet/README.md` lists the network and acquirer settings and has tools to poke the issuer by hand
-and to inspect and dump messages and files.
+all line up with the commands above. [`cardnet/README.md`](cardnet/README.md) lists the network and acquirer settings and has tools to poke the
+issuer by hand and to inspect and dump messages and files.
+
+### Troubleshooting
+
+| What you see | What to do |
+|---|---|
+| `Cannot connect to the Docker daemon` or similar | start Docker Desktop (or the Docker service) and wait until it says it is running |
+| "port is already allocated" or "address already in use" | something else uses 4200, 8080, 9000, 9100 or 5433; stop it, or run `docker compose down` for an older copy of this stack |
+| the pages do not load right after `docker compose up` | wait a minute; check `docker compose ps` and `docker compose logs neobank` |
+| a payment is declined with code **65** ("too many payments in a short time") | the bank allows ten approvals per card in ten minutes: wait a few minutes, or reset with `docker compose down -v` and start again |
+| the scenario fails the second time | it needs a fresh stack or ten minutes between runs (same ten-approval rule) |
+| `&&` is "not a valid statement separator", or Maven says "Unknown lifecycle phase" | you are in Windows PowerShell: use the PowerShell commands in Option B (`.\mvnw.cmd`, no `&&`, the `-D...` setting in quotes) |
+| `./mvnw: Permission denied` | an old clone: run `chmod +x mvnw cardnet/mvnw` |
+| the tests fail at once with a Docker or "Could not find a valid Docker environment" message | the tests start a real PostgreSQL through Testcontainers: start Docker first |
+| you want to start over | `docker compose down -v` (Docker) removes the stack and its data |
 
 ## Testing and quality
 
